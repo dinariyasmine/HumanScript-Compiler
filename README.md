@@ -1,4 +1,4 @@
-### Compilation and Execution Steps
+### Compilation and Execution Steps (Commands)
 
 1. **Generate the syntax analysis files** using Bison:
    ```bash
