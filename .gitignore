@@ -24,3 +24,8 @@
 
 # Flex/Bison generated files
 lex.yy.c
+compiler
+analyse_syntaxique
+*.out
+*.exe
+syntaxique.tab.*
