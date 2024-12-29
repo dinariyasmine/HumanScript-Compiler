@@ -1,0 +1,50 @@
+int x
+Let int x be 10
+Let float y be 3.14
+Let bool isActive be true
+Let str name be "Aicha" + "Rezzoug"
+Let Array numbers be [1, 2, 3, 4, 5]
+Let Dict userInfo be {"name": "Aicha", "age": 25}
+Function greet: str (str username) {
+    Print "Hello, " + username
+    For each num in numbers:
+    Print "Number: " + num
+EndFor
+    return "Greeting sent"
+}
+Call greet with parameters (name)
+if x > 5:
+    Print "hi"
+elseIf x < 5:
+    Print "good"
+elseIf x == 5:
+    Print "perfect"
+else:
+    Print "hello"
+EndIf
+For each num in numbers:
+    Print "Number: " + num
+EndFor
+While counter < 5:
+    Print "Counter is: "
+    Let int counter be counter + 1
+EndWhile
+Let int sum be 0
+Print "Total sum is: " + sum
+Let int day be 3
+Switch day:
+    Case 1:
+        Print "Monday"
+    Case 2:
+        Print "Tuesday"
+    Case 3:
+        Print "Wednesday"
+    Default:
+        Print "Invalid day"
+EndSwitch
+Repeat:
+Let int sum be sum + 1
+Let int counter be counter - 1
+Until counter == 0
+EndRepeat
+comment : Hello .
