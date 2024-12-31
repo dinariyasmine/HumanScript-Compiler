@@ -4,7 +4,7 @@ Let float y be 3.14
 Let bool isActive be true
 Let str name be "Aicha" + "Rezzoug"
 Let Array numbers be [1, 2, 3, 4, 5]
-Let Dict userInfo be {"name": "Aicha", "age": 25}
+Let Dict userInfo be {"name": "Aicha", "age": 21}
 Function greet: str (str username) {
     Print "Hello, " + username
     For each num in numbers:

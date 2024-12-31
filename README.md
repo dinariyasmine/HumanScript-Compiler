@@ -1,4 +1,4 @@
-### Compilation and Execution Steps (Commands)
+### Compilation and Execution Steps
 
 1. **Use Linux Subsystems**:
    ```bash

@@ -1,4 +1,4 @@
-/* Description: Grammaire complète pour un langage de programmation simple HumanScript
+/* Description: Grammaire complète pour le langage de programmation HumanScript
  * Ce fichier contient les règles syntaxiques et les actions
  * pour l'analyse du langage
  */
@@ -13,7 +13,7 @@ extern int yylex();
 extern int yylineno; 
 extern char* yytext;
 extern FILE* yyin;
-int CURSOR_POSITION = 0;
+int positionCurseur = 0;
 char *file = "input.txt";
 void yyerror(const char *s);
 %}
@@ -294,10 +294,10 @@ DictItem:
 void yyerror(const char *s) {
     if (strcmp(s, "syntax error") == 0) {
         fprintf(stderr, "File '%s', line %d, character %d: syntax error, unexpected '%s'\n", 
-                file, yylineno, CURSOR_POSITION, yytext);
+                file, yylineno, positionCurseur, yytext);
     } else {
         fprintf(stderr, "File '%s', line %d, character %d: %s\n", 
-                file, yylineno, CURSOR_POSITION, s);
+                file, yylineno, positionCurseur, s);
     }
 }
 

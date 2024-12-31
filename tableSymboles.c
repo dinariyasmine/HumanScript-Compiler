@@ -34,9 +34,9 @@ SymbolTable *createSymbolTable() {
 }
 int currentColumn = 1;  // Définition de currentColumn
 
-void showLexicalError(char *msg) {
+/**void showLexicalError(char *msg) {
     fprintf(stderr, "Erreur lexicale : %s\n", msg);
-}
+}**/
 
 /*************************************** Inserer un Symbole *************************************************/
 // Fonctionnement :

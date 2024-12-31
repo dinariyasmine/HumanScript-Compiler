@@ -4,203 +4,203 @@
 #include <stdbool.h>
 #include "tableSymboles.h" 
 #include <ctype.h>
-#define MAX_SYMBOLS 100
+#define MAX_SYMBOLES 100
 #define MAX_TERMINALS 100
-#define MAX_RULES 100
-#define MAX_SET_SIZE 100
-#define MAX_STACK_SIZE 100
-#define MAX_INPUT_SIZE 1000
+#define MAX_REGLES 100
+#define TALLE_MAX_ENSEMBLE 100
+#define TAILLE_MAX_PILE 100
+#define TAILLE_MAX_INPUT 1000
 
 typedef struct {
-    char* elements[MAX_SET_SIZE];
+    char* elements[TALLE_MAX_ENSEMBLE];
     int size;
-} SymbolSet;
+} ensemble_symbole;
 
 
 typedef struct {
     char* nonTerminal;
     char* terminal;
     char* production;
-} TableEntry;
+} entree_tab_analyse;
 
 typedef struct {
-    TableEntry* entries;
-    int numEntries;
+    entree_tab_analyse* entree;
+    int numEntrees;
     char** terminals;
     int numTerminals;
     char** nonTerminals;
     int numNonTerminals;
-    SymbolSet* debut;   
-    SymbolSet* suivant;   
-} ParseTable;
-// New structure for the parser stack
+    ensemble_symbole* debut;   
+    ensemble_symbole* suivant;   
+} Table_analyse;
+
 typedef struct {
-    char* items[MAX_STACK_SIZE];
+    char* items[TAILLE_MAX_PILE];
     int top;
-} ParserStack;
+} pile_analyse;
 
-// Stack operations
-void initStack(ParserStack* stack) {
-    stack->top = -1;
+void init_pile(pile_analyse* pile) {
+    pile->top = -1;
 }
 
-void push(ParserStack* stack, const char* item) {
-    if (stack->top < MAX_STACK_SIZE - 1) {
-        stack->items[++stack->top] = strdup(item);
+void empiler(pile_analyse* pile, const char* item) {
+    if (pile->top < TAILLE_MAX_PILE - 1) {
+        pile->items[++pile->top] = strdup(item);
     }
 }
 
-char* pop(ParserStack* stack) {
-    if (stack->top >= 0) {
-        return stack->items[stack->top--];
+char* depiler(pile_analyse* pile) {
+    if (pile->top >= 0) {
+        return pile->items[pile->top--];
+    }
+    return NULL;
+}
+
+char* sommet_pile(pile_analyse* pile) {
+    if (pile->top >= 0) {
+        return pile->items[pile->top];
     }
     return NULL;
 }
 
-char* peek(ParserStack* stack) {
-    if (stack->top >= 0) {
-        return stack->items[stack->top];
+void initensemble(ensemble_symbole* ensemble) {
+    ensemble->size = 0;
+}
+
+void ajouter_a_ensemble(ensemble_symbole* ensemble, const char* element) {
+    for (int i = 0; i < ensemble->size; i++) {
+        if (strcmp(ensemble->elements[i], element) == 0) return;
     }
-    return NULL;
+    ensemble->elements[ensemble->size] = strdup(element);
+    ensemble->size++;
 }
-// Initialize a symbol set
-void initSet(SymbolSet* set) {
-    set->size = 0;
-}
-// Add an element to a set
-void addToSet(SymbolSet* set, const char* element) {
-    for (int i = 0; i < set->size; i++) {
-        if (strcmp(set->elements[i], element) == 0) return;
-    }
-    set->elements[set->size] = strdup(element);
-    set->size++;
-}
-// Initialize the parse table
-ParseTable* initializeParseTable() {
-    ParseTable* table = (ParseTable*)malloc(sizeof(ParseTable));
-    table->entries = (TableEntry*)malloc(MAX_RULES * sizeof(TableEntry));
+
+Table_analyse* initialiser_table_analyse() {
+    Table_analyse* table = (Table_analyse*)malloc(sizeof(Table_analyse));
+    table->entree = (entree_tab_analyse*)malloc(MAX_REGLES * sizeof(entree_tab_analyse));
     table->terminals = (char**)malloc(MAX_TERMINALS * sizeof(char*));
-    table->nonTerminals = (char**)malloc(MAX_SYMBOLS * sizeof(char*));
-    table->debut = (SymbolSet*)malloc(MAX_SYMBOLS * sizeof(SymbolSet));
-    table->suivant = (SymbolSet*)malloc(MAX_SYMBOLS * sizeof(SymbolSet));
+    table->nonTerminals = (char**)malloc(MAX_SYMBOLES * sizeof(char*));
+    table->debut = (ensemble_symbole*)malloc(MAX_SYMBOLES * sizeof(ensemble_symbole));
+    table->suivant = (ensemble_symbole*)malloc(MAX_SYMBOLES * sizeof(ensemble_symbole));
     
-    for (int i = 0; i < MAX_SYMBOLS; i++) {
-        initSet(&table->debut[i]);
-        initSet(&table->suivant[i]);
+    for (int i = 0; i < MAX_SYMBOLES; i++) {
+        initensemble(&table->debut[i]);
+        initensemble(&table->suivant[i]);
     }
     
-    table->numEntries = 0;
+    table->numEntrees = 0;
     table->numTerminals = 0;
     table->numNonTerminals = 0;
     return table;
 }
 
-void initializeDebutAndSuivantSets(ParseTable* table) {
+void DebutSuivant(Table_analyse* table) {
     int idxZ = 0;  // Index  Z
     int idxS = 1;  // Index S
     int idxA = 2;  // Index A
     int idxB = 3;  // Index B
 
     // DEBUT(A)
-    addToSet(&table->debut[idxA], "INT");
-    addToSet(&table->debut[idxA], "STR");
-    addToSet(&table->debut[idxA], "CONST");
-    addToSet(&table->debut[idxA], "FLOAT");
-    addToSet(&table->debut[idxA], "BOOL");
-    addToSet(&table->debut[idxA], "ARRAY");
-    addToSet(&table->debut[idxA], "DICT");
+    ajouter_a_ensemble(&table->debut[idxA], "int");
+    ajouter_a_ensemble(&table->debut[idxA], "str");
+    ajouter_a_ensemble(&table->debut[idxA], "const");
+    ajouter_a_ensemble(&table->debut[idxA], "float");
+    ajouter_a_ensemble(&table->debut[idxA], "bool");
+    ajouter_a_ensemble(&table->debut[idxA], "array");
+    ajouter_a_ensemble(&table->debut[idxA], "dict");
 
     // DEBUT(B)
-    addToSet(&table->debut[idxB], "ID");
+    ajouter_a_ensemble(&table->debut[idxB], "ID");
 
     // DEBUT(S) = DEBUT(A)
     for (int i = 0; i < table->debut[idxA].size; i++) {
-        addToSet(&table->debut[idxS], table->debut[idxA].elements[i]);
+        ajouter_a_ensemble(&table->debut[idxS], table->debut[idxA].elements[i]);
     }
 
     // DEBUT(Z) = DEBUT(S)
     for (int i = 0; i < table->debut[idxS].size; i++) {
-        addToSet(&table->debut[idxZ], table->debut[idxS].elements[i]);
+        ajouter_a_ensemble(&table->debut[idxZ], table->debut[idxS].elements[i]);
     }
 
-    // SUIVANT sets
-    addToSet(&table->suivant[idxZ], "#");    // SUIVANT(Z) = {#}
-    addToSet(&table->suivant[idxS], "#");    // SUIVANT(S) = {#}
-    addToSet(&table->suivant[idxA], "ID");   // SUIVANT(A) = {ID}
-    addToSet(&table->suivant[idxB], "#");    // SUIVANT(B) = {#}
+    // SUIVANT 
+    ajouter_a_ensemble(&table->suivant[idxZ], "#");    // SUIVANT(Z) = {#}
+    ajouter_a_ensemble(&table->suivant[idxS], "#");    // SUIVANT(S) = {#}
+    ajouter_a_ensemble(&table->suivant[idxA], "ID");   // SUIVANT(A) = {ID}
+    ajouter_a_ensemble(&table->suivant[idxB], "#");    // SUIVANT(B) = {#}
 }
-// Add an entry to the parse table
-void addTableEntry(ParseTable* table, const char* nonTerminal, const char* terminal, const char* production) {
-    TableEntry entry;
+
+
+void ajouter_entree_table_analyse(Table_analyse* table, const char* nonTerminal, const char* terminal, const char* production) {
+    entree_tab_analyse entry;
     entry.nonTerminal = strdup(nonTerminal);
     entry.terminal = strdup(terminal);
     entry.production = strdup(production);
-    table->entries[table->numEntries++] = entry;
+    table->entree[table->numEntrees++] = entry;
 }
-// Build the parse table
-void buildParseTable(ParseTable* table) {
+
+void creer_table_analyse(Table_analyse* table) {
     const char* nonTerminals[] = {"Z", "S", "A", "B"};
     for (int i = 0; i < 4; i++) {
         table->nonTerminals[i] = strdup(nonTerminals[i]);
     }
     table->numNonTerminals = 4;
 
-    const char* terminals[] = {"INT", "STR", "CONST", "FLOAT", "BOOL", "ARRAY", "DICT", "ID", "#"};
+    const char* terminals[] = {"int", "str", "const", "float", "bool", "array", "dict", "ID", "#"};
     for (int i = 0; i < 9; i++) {
         table->terminals[i] = strdup(terminals[i]);
     }
     table->numTerminals = 9;
 
-    initializeDebutAndSuivantSets(table);
+    DebutSuivant(table);
 
     // Z -> S #
     for (int i = 0; i < table->debut[0].size; i++) {
-        addTableEntry(table, "Z", table->debut[0].elements[i], "S #");
+        ajouter_entree_table_analyse(table, "Z", table->debut[0].elements[i], "S #");
     }
     
     // S -> A B
     for (int i = 0; i < table->debut[2].size; i++) {
-        addTableEntry(table, "S", table->debut[2].elements[i], "A B");
+        ajouter_entree_table_analyse(table, "S", table->debut[2].elements[i], "A B");
     }
 
-    // A's productions
-    addTableEntry(table, "A", "INT", "INT");
-    addTableEntry(table, "A", "STR", "STR");
-    addTableEntry(table, "A", "CONST", "CONST");
-    addTableEntry(table, "A", "FLOAT", "FLOAT");
-    addTableEntry(table, "A", "BOOL", "BOOL");
-    addTableEntry(table, "A", "ARRAY", "ARRAY");
-    addTableEntry(table, "A", "DICT", "DICT");
+    ajouter_entree_table_analyse(table, "A", "int", "int");
+    ajouter_entree_table_analyse(table, "A", "str", "str");
+    ajouter_entree_table_analyse(table, "A", "const", "const");
+    ajouter_entree_table_analyse(table, "A", "float", "float");
+    ajouter_entree_table_analyse(table, "A", "bool", "bool");
+    ajouter_entree_table_analyse(table, "A", "array", "array");
+    ajouter_entree_table_analyse(table, "A", "dict", "dict");
 
     // B -> ID
-    addTableEntry(table, "B", "ID", "ID");
+    ajouter_entree_table_analyse(table, "B", "ID", "ID");
 }
-// Print a set
-void printSet(const char* setName, SymbolSet* set) {
-    printf("%s: { ", setName);
-    for (int i = 0; i < set->size; i++) {
-        printf("%s", set->elements[i]);
-        if (i < set->size - 1) printf(", ");
+
+
+void afficher_ensemble(const char* nom_ensemble, ensemble_symbole* ensemble) {
+    printf("%s: { ", nom_ensemble);
+    for (int i = 0; i < ensemble->size; i++) {
+        printf("%s", ensemble->elements[i]);
+        if (i < ensemble->size - 1) printf(", ");
     }
     printf(" }\n");
 }
-// Print DEBUT sets
-void printDebutSets(ParseTable* table) {
+
+void afficher_debuts(Table_analyse* table) {
     printf("\nEnsembles DEBUT:\n");
     for (int i = 0; i < table->numNonTerminals; i++) {
-        printSet(table->nonTerminals[i], &table->debut[i]);
-    }
-}
-// Print SUIVANT sets
-void printSuivantSets(ParseTable* table) {
-    printf("\nEnsembles SUIVANT:\n");
-    for (int i = 0; i < table->numNonTerminals; i++) {
-        printSet(table->nonTerminals[i], &table->suivant[i]);
+        afficher_ensemble(table->nonTerminals[i], &table->debut[i]);
     }
 }
 
-void printtableAnalyseSyntaxique(ParseTable* table) {
-    printf("\nTable d'analyse LL(1):\n\n");
+void affichier_suivants(Table_analyse* table) {
+    printf("\nEnsembles SUIVANT:\n");
+    for (int i = 0; i < table->numNonTerminals; i++) {
+        afficher_ensemble(table->nonTerminals[i], &table->suivant[i]);
+    }
+}
+
+void afficher_table_analyse(Table_analyse* table) {
+    printf("\nTable d'analyse syntaxique:\n\n");
     // En-tête
     printf("%-12s", "");
     for (int i = 0; i < table->numTerminals; i++) {
@@ -218,10 +218,10 @@ void printtableAnalyseSyntaxique(ParseTable* table) {
         
         for (int j = 0; j < table->numTerminals; j++) {
             bool found = false;
-            for (int k = 0; k < table->numEntries; k++) {
-                if (strcmp(table->entries[k].nonTerminal, table->nonTerminals[i]) == 0 &&
-                    strcmp(table->entries[k].terminal, table->terminals[j]) == 0) {
-                    printf("%-12s", table->entries[k].production);
+            for (int k = 0; k < table->numEntrees; k++) {
+                if (strcmp(table->entree[k].nonTerminal, table->nonTerminals[i]) == 0 &&
+                    strcmp(table->entree[k].terminal, table->terminals[j]) == 0) {
+                    printf("%-12s", table->entree[k].production);
                     found = true;
                     break;
                 }
@@ -233,12 +233,13 @@ void printtableAnalyseSyntaxique(ParseTable* table) {
         printf("\n");
     }
 }
-// Free allocated memory
-void freeParseTable(ParseTable* table) {
-    for (int i = 0; i < table->numEntries; i++) {
-        free(table->entries[i].nonTerminal);
-        free(table->entries[i].terminal);
-        free(table->entries[i].production);
+
+
+void liberer_table_analyse(Table_analyse* table) {
+    for (int i = 0; i < table->numEntrees; i++) {
+        free(table->entree[i].nonTerminal);
+        free(table->entree[i].terminal);
+        free(table->entree[i].production);
     }
     for (int i = 0; i < table->numTerminals; i++) {
         free(table->terminals[i]);
@@ -252,21 +253,21 @@ void freeParseTable(ParseTable* table) {
             free(table->suivant[i].elements[j]);
         }
     }
-    free(table->entries);
+    free(table->entree);
     free(table->terminals);
     free(table->nonTerminals);
     free(table->debut);
     free(table->suivant);
     free(table);
 }
-const char* getProduction(ParseTable* table, const char* nonTerminal, const char* terminal) {
+const char* lire_table_analyse(Table_analyse* table, const char* nonTerminal, const char* terminal) {
     // Parcours des entrées de la table
-    for (int i = 0; i < table->numEntries; i++) {
+    for (int i = 0; i < table->numEntrees; i++) {
         // Si une entrée correspond à la combinaison non-terminal/terminal
-        if (strcmp(table->entries[i].nonTerminal, nonTerminal) == 0 &&
-            strcmp(table->entries[i].terminal, terminal) == 0) {
+        if (strcmp(table->entree[i].nonTerminal, nonTerminal) == 0 &&
+            strcmp(table->entree[i].terminal, terminal) == 0) {
             // Retourne la production associée
-            return table->entries[i].production;
+            return table->entree[i].production;
         }
     }
     // Si aucune entrée ne correspond, retourne "erreur"
@@ -275,156 +276,142 @@ const char* getProduction(ParseTable* table, const char* nonTerminal, const char
 
 typedef struct {
     char** tokens;
-    int count;
-} TokenArray;
+    int nb_token;
+} tableau_tokens;
 
-// Add this new function to validate identifiers
-bool isValidIdentifier(const char* str) {
-    if (!str || strlen(str) == 0) return false;
+bool identifiant_valide(const char* id) {
+    if (!id || strlen(id) == 0) return false;
     
-    // First character must be a letter or underscore
-    if (!isalpha(str[0]) && str[0] != '_') return false;
+    if (!isalpha(id[0]) && id[0] != '_') return false;
     
-    // Rest can be letters, numbers, or underscores
-    for (int i = 1; str[i] != '\0'; i++) {
-        if (!isalnum(str[i]) && str[i] != '_') return false;
+    for (int i = 1; id[i] != '\0'; i++) {
+        if (!isalnum(id[i]) && id[i] != '_') return false;
     }
     
-    // Check if it's not a reserved word
-    const char* reservedWords[] = {"INT", "STR", "CONST", "FLOAT", "BOOL", "ARRAY", "DICT", "ID"};
-    int numReserved = sizeof(reservedWords) / sizeof(reservedWords[0]);
-    
-    for (int i = 0; i < numReserved; i++) {
-        if (strcasecmp(str, reservedWords[i]) == 0) return false;
+    const char* mots_cles[] = {"int", "str", "const", "float", "bool", "array", "dict", "ID"};
+    int nb_mots_cles = sizeof(mots_cles) / sizeof(mots_cles[0]);
+    for (int i = 0; i < nb_mots_cles; i++) {
+        if (strcasecmp(id, mots_cles[i]) == 0) return false;
     }
-    
     return true;
 }
 
-// Modified tokenizeInput function to handle identifiers
-TokenArray tokenizeInput(const char* input) {
-    TokenArray result = {malloc(MAX_INPUT_SIZE * sizeof(char*)), 0};
-    char* inputCopy = strdup(input);
-    char* token = strtok(inputCopy, " \t\n");
+tableau_tokens decouper_input(const char* input) {
+    tableau_tokens result = {malloc(TAILLE_MAX_INPUT * sizeof(char*)), 0};
+    char* copie_input = strdup(input);
+    char* token = strtok(copie_input, " \t\n");
     
     while (token != NULL) {
-        // Check if this token should be treated as an identifier
-        if (result.count > 0 && 
-            strcmp(result.tokens[result.count-1], "ID") != 0 && 
-            isValidIdentifier(token)) {
-            // Save the original identifier
+        if (result.nb_token > 0 && 
+            strcmp(result.tokens[result.nb_token-1], "ID") != 0 && 
+            identifiant_valide(token)) {
             char* identifier = strdup(token);
-            // Add "ID" token
-            result.tokens[result.count++] = strdup("ID");
-            // Add the actual identifier
-            result.tokens[result.count++] = identifier;
-        } else {
-            result.tokens[result.count++] = strdup(token);
+            result.tokens[result.nb_token++] = strdup("ID");
+            // On remplace notre token par ID et on le met dans le tableau de token
+            result.tokens[result.nb_token++] = identifier;
+            // On stocke le vrai identifiant
+        } 
+        else {
+            result.tokens[result.nb_token++] = strdup(token);
         }
         token = strtok(NULL, " \t\n");
     }
-    
-    free(inputCopy);
+     
+    free(copie_input);
     return result;
 }
 
-// Modified analyzeSyntax function
-bool analyzeSyntax(ParseTable* table, const char* input, SymbolTable* symTable) {
-    ParserStack stack;
-    initStack(&stack);
+bool reconnaissance(Table_analyse* table, const char* input, SymbolTable* symTable) {
+    pile_analyse pile;
+    init_pile(&pile);
     
-    push(&stack, "#");
-    push(&stack, "Z");
+    empiler(&pile, "#");
+    empiler(&pile, "Z");
     
-    TokenArray tokens = tokenizeInput(input);
-    int currentToken = 0;
+    tableau_tokens tokens = decouper_input(input);
+    int symbole_courant = 0;
+    // ajouter le # a la fin de la chaine d'entree
+    tokens.tokens[tokens.nb_token] = strdup("#");
+    tokens.nb_token++;
     
-    tokens.tokens[tokens.count] = strdup("#");
-    tokens.count++;
+    char* id_courant = NULL;
+    char* type_courant = NULL;
     
-    char* currentIdentifier = NULL;
-    char* currentType = NULL;
-    
-    while (stack.top >= 0) {
-        char* X = peek(&stack);
-        char* a = tokens.tokens[currentToken];
+    while (pile.top >= 0) {
+        char* X = sommet_pile(&pile);
+        char* a = tokens.tokens[symbole_courant];
         
-        printf("Stack top: %s, Current input: %s\n", X, a);
         
-        if (strcmp(X, "#") == 0 && strcmp(a, "#") == 0) {
-            printf("Analysis successful!\n");
-            // Insert into symbol table if we have both type and identifier
-            if (currentType != NULL && currentIdentifier != NULL) {
-                insertSymbol(symTable, currentIdentifier, currentType, NULL, 1);
-                printf("Inserted %s of type %s into symbol table\n", currentIdentifier, currentType);
+        if (strcmp(X, "#") == 0 && strcmp(a, "#") == 0) 
+        {
+            printf("La chaine est syntaxiquement correcte !\n");
+            if (type_courant != NULL && id_courant != NULL) {
+                insertSymbol(symTable, id_courant, type_courant, NULL, 1);
             }
             return true;
         }
         
-        bool isTerminal = false;
+        bool terminal = false;
         for (int i = 0; i < table->numTerminals; i++) {
             if (strcmp(X, table->terminals[i]) == 0) {
-                isTerminal = true;
+                terminal = true;
                 break;
             }
         }
         
-        if (isTerminal) {
-            if (strcmp(X, a) != 0) {
-                printf("Error: Expected %s but got %s\n", X, a);
+        if (terminal) {
+            if (strcmp(X, a) != 0 ) {
+                printf("Erreur\n");
                 return false;
             } else {
-                // Store type and identifier information
-                if (strcmp(X, "INT") == 0 || strcmp(X, "FLOAT") == 0 ||
-                    strcmp(X, "STR") == 0 || strcmp(X, "BOOL") == 0 ||
-                    strcmp(X, "ARRAY") == 0 || strcmp(X, "DICT") == 0 || strcmp(X, "CONST") == 0) {
-                    currentType = strdup(X);
+                if (strcmp(X, "int") == 0 || strcmp(X, "float") == 0 ||
+                    strcmp(X, "str") == 0 || strcmp(X, "bool") == 0 ||
+                    strcmp(X, "array") == 0 || strcmp(X, "dict") == 0 || strcmp(X, "const") == 0) {
+                    type_courant = strdup(X);
                 }
-                if (strcmp(X, "ID") == 0 && currentToken + 1 < tokens.count) {
-                    currentIdentifier = strdup(tokens.tokens[currentToken + 1]);
-                    currentToken++; // Skip the actual identifier
+                if (strcmp(X, "ID") == 0 && symbole_courant + 1 < tokens.nb_token) {
+                    id_courant = strdup(tokens.tokens[symbole_courant + 1]);
+                    symbole_courant++; 
                 }
                 
-                free(pop(&stack));
-                currentToken++;
+                free(depiler(&pile));
+                // ON Ignore le prochain token car on l'a changé par ID  
+                symbole_courant++;
                 continue;
             }
-        }
+        } 
         
-        const char* production = getProduction(table, X, a);
+        const char* production = lire_table_analyse(table, X, a);
         
         if (strcmp(production, "erreur") == 0) {
-            printf("Error: No production found for %s with input %s\n", X, a);
+            printf("Erreur! %s \n", a);
             return false;
         }
         
-        free(pop(&stack));
+        free(depiler(&pile));
         
-        char* prodCopy = strdup(production);
-        char* symbol = strtok(prodCopy, " ");
-        char* symbols[MAX_STACK_SIZE];
-        int symbolCount = 0;
-        
+        char* production_Copie = strdup(production);
+        char* symbol = strtok(production_Copie, " ");
+        char* symboles_production[TAILLE_MAX_PILE];
+        int nb_symboles = 0;
         while (symbol != NULL) {
-            symbols[symbolCount++] = strdup(symbol);
+            symboles_production[nb_symboles++] = strdup(symbol);
             symbol = strtok(NULL, " ");
         }
         
-        for (int i = symbolCount - 1; i >= 0; i--) {
-            if (strcmp(symbols[i], "ε") != 0) {
-                push(&stack, symbols[i]);
+        for (int i = nb_symboles - 1; i >= 0; i--) {
+            if (strcmp(symboles_production[i], "ε") != 0) {
+                empiler(&pile, symboles_production[i]);
             }
-            free(symbols[i]);
+            free(symboles_production[i]);
         }
         
-        free(prodCopy);
+        free(production_Copie);
     }
     
-    // Clean up
-    if (currentType) free(currentType);
-    if (currentIdentifier) free(currentIdentifier);
-    
-    for (int i = 0; i < tokens.count; i++) {
+    if (type_courant) free(type_courant);
+    if (id_courant) free(id_courant);
+    for (int i = 0; i < tokens.nb_token; i++) {
         free(tokens.tokens[i]);
     }
     free(tokens.tokens);
@@ -432,26 +419,24 @@ bool analyzeSyntax(ParseTable* table, const char* input, SymbolTable* symTable) 
     return false;
 }
 int main() {
-    ParseTable* table = initializeParseTable();
-    buildParseTable(table);
+    Table_analyse* table = initialiser_table_analyse();
+    creer_table_analyse(table);
     
-    // Initialize symbol table
     SymbolTable* symTable = createSymbolTable();
-    
-    // Example usage
     char input[1000];
-    printf("Enter input string (e.g., 'INT myVar'): ");
+    printf("Donner déclaration :  ");
     fgets(input, sizeof(input), stdin);
-    input[strcspn(input, "\n")] = 0;  // Remove newline
-    
-    if (analyzeSyntax(table, input, symTable)) {
-        printf("\nSymbol table after analysis:\n");
+    input[strcspn(input, "\n")] = 0;  
+    if (reconnaissance(table, input, symTable)) {
+        afficher_debuts(table);
+        affichier_suivants(table);
+        afficher_table_analyse(table);
+        printf("\nTable de symbole apres analyse:\n");
         listAllSymbols(symTable);
     }
     
   
-    freeParseTable(table);
-    
+    liberer_table_analyse(table);
     
     return 0;
 }
