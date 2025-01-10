@@ -32,7 +32,6 @@ SymbolTable *createSymbolTable() {
     table->nextId = 0; // Initialisation du compteur d'ID
     return table;
 }
-int currentColumn = 1;  // Définition de currentColumn
 
 /**void showLexicalError(char *msg) {
     fprintf(stderr, "Erreur lexicale : %s\n", msg);

@@ -1,56 +1,81 @@
-/* Description: Grammaire complète pour le langage de programmation HumanScript
- * Ce fichier contient les règles syntaxiques et les actions
- * pour l'analyse du langage
- */
-
 %define parse.error verbose
 
 %{
+#define simpleToArrayOffset 4
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#define YYDEBUG 1
+
+
 extern int yylex();
 extern int yylineno; 
 extern char* yytext;
 extern FILE* yyin;
 int positionCurseur = 0;
 char *file = "input.txt";
-void yyerror(const char *s);
+
+void yyerror(const char *s);  
 %}
 
+%code requires{
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <math.h>
+#include "semantic.h"
+#include "tableSymboles.h"
+#include "quadruplets.h"
+#include "pile.h"
+}
 
 
-/* Définition des tokens */
-/* Types de données */
-%token INT FLOAT BOOL STR 
+%union {
+    char identifier[255];
+    int type;
+    int integerValue;
+    double floatValue;
+    bool booleanValue;
+    char stringValue[255];
+    SymbolEntry *symbole;
+    expression expression;
+    variable variable;
+}
+
+%token <type> INT FLOAT BOOL STR 
 %token CONST ARRAY DICT FUNCTION 
-
-/* Mots-clés pour les déclarations et appels */
 %token LET BE CALL WITH PARAMETERS
-
-/* Structures de contrôle */
 %token ELSEIF IF ELSE ENDIF
 %token FOR EACH IN ENDFOR
 %token WHILE ENDWHILE
 %token REPEAT UNTIL ENDREPEAT
-%token INPUT TO PRINT
+%token INPUT TO
+%token PRINT
 %token SWITCH CASE DEFAULT ENDSWITCH
 %token RETURN
 
-/* Opérateurs */
 %token ADD SUB MUL DIV INT_DIV MOD
 %token EQUAL NOT_EQUAL GREATER_THAN LESS_THAN GREATER_EQUAL LESS_EQUAL
 %token COLON LPAREN RPAREN LBRACE RBRACE COMMA LBRACKET RBRACKET
 %token LOGICAL_AND LOGICAL_OR LOGICAL_NOT
 
-/* Valeurs littérales et identificateurs */
-%token TRUE FALSE
-%token INT_LITERAL FLOAT_LITERAL STRING_LITERAL
-%token ID COMMENT
+%token <booleanValue> TRUE FALSE
+%token <integerValue> INT_LITERAL 
+%token <floatValue> FLOAT_LITERAL 
+%token <stringValue> STRING_LITERAL
+%token <identifier> ID 
+%token COMMENT
 
-/* Définition des priorités et associativités des opérateurs
- * L'ordre des déclarations définit la priorité (du plus bas au plus haut)
- */
+/* Type definitions for non-terminals */
+%type <expression> Expression SimpleExpression ExpressionList
+%type <type> Type
+%type <symbole> Declaration Parameter ParameterList NonEmptyParameterList
+%type <variable> Assignment
+
+/* Precedence rules */
 %left LOGICAL_OR
 %left LOGICAL_AND
 %left EQUAL NOT_EQUAL
@@ -58,16 +83,31 @@ void yyerror(const char *s);
 %left ADD SUB
 %left MUL DIV MOD INT_DIV
 %right LOGICAL_NOT
-%nonassoc UMINUS  /* Pour la négation unaire */
+%nonassoc UMINUS
 
-/* Point de départ de la grammaire */
 %start Program
+%{
+extern FILE *yyin;
+extern int yylineno;
+extern int yyleng;
+extern int yylex();
 
+int currentColumn = 1;
+
+SymbolTable *myTable;
+
+pile * stack;
+quad * q;
+int qc = 1;
+
+
+
+void yysuccess(char *s);
+void yyerror(const char *s);
+void showLexicalError();
+%}
 %%
 
-/* Règles de la grammaire */
-
-/* Programme principal : liste de déclarations et instructions */
 Program:
     StatementList
     ;
@@ -92,6 +132,7 @@ SimpleStatement:
     | PrintStatement
     | Assignment
     | FunctionCall
+    | InputStatement
     | RETURN Expression
     ;
 
@@ -168,7 +209,7 @@ Declaration:
     | Type ID { printf("Déclaration correcte syntaxiquement\n"); }
     ;
 
-/* Types de données supportés */
+
 Type:
     INT | FLOAT | BOOL | STR | ARRAY | DICT
     ;
@@ -182,6 +223,9 @@ Assignment:
 PrintStatement:
     PRINT Expression
     ;
+InputStatement:
+    INPUT Expression TO ID
+;
 
 /* Déclaration de fonction */
 Function:
@@ -318,6 +362,16 @@ int main(void) {
     } else {
         printf("Erreur lors de l'analyse syntaxique.\n");
     }
+    stack = (pile *)malloc(sizeof(pile));
+    yyparse();  
+    myTable = createSymbolTable();
+
+    listAllSymbols(myTable);  
+
+    
+    afficherQuad(q);
+    
+    
 
     fclose(yyin);
     printf("Fichier d'entrée fermé.\n");
@@ -327,6 +381,6 @@ int main(void) {
     } else {
         printf("Erreur lors de l'exécution du programme.\n");
     }
-
+    
     return result;
 }

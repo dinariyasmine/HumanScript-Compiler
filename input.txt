@@ -47,4 +47,5 @@ Let int sum be sum + 1
 Let int counter be counter - 1
 Until counter == 0
 EndRepeat
+Input x to hello
 comment : Hello .

@@ -1,5 +1,6 @@
 %{ 
 #include <stdio.h>
+#include <stdbool.h>
 #include "syntaxique.tab.h"
 extern void yyerror(const char *s);
 extern int positionCurseur;

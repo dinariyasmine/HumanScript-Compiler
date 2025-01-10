@@ -7,6 +7,22 @@
 #include <string.h> 
 #include <stdio.h> 
 
+#define TYPE_BOOLEAN 0
+#define TYPE_INTEGER 1
+#define TYPE_FLOAT 2
+#define TYPE_STRING 3
+#define TYPE_ARRAY_BOOLEAN 4
+#define TYPE_ARRAY_INTEGER 5
+#define TYPE_ARRAY_FLOAT 6
+#define TYPE_ARRAY_STRING 7
+#define TYPE_ARRAY 8
+#define TYPE_DICT 9
+#define TYPE_FUNCTION 10
+#define TYPE_ERROR 11
+
+#define ROWS 128
+#define COLS 32
+
 // Definitions de constantes
 #define HASH_TABLE_SIZE 101 // Taille de la table de hachage (un nombre premier pour une meilleure distribution des hachages)
 
@@ -26,9 +42,6 @@ typedef struct SymbolTable {
     int nextId;                            // Compteur pour generer des identifiants uniques pour les symboles
 } SymbolTable;
 
-// Prototypes de fonctions
-extern int currentColumn;  // Déclaration de currentColumn
-extern void showLexicalError(char *msg);  // Déclaration de showLexicalError
 
 /*************************************** Fonctions de gestion de la Table des Symboles *************************/
 
@@ -119,5 +132,4 @@ void freeSymbolEntry(SymbolEntry *entry);
 // - `newSize` : La nouvelle taille souhaitee pour la table des symboles
 // Retour : Rien.
 void resizeSymbolTable(SymbolTable *table, int newSize);
-
 
