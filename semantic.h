@@ -36,5 +36,6 @@ void arrayPush(ArrayType* arr, SymbolValue value);
 void freeArray(ArrayType* arr);
 ExpressionList* addExpressionToList(ExpressionList* list, expression expr);
 ExpressionList* createExpressionNode(expression expr);
-
+bool validateTypeCompatibility(int declaredType, int expressionType);
+int countParameters(SymbolEntry* paramList) ;
 #endif // SEMANTIC_H

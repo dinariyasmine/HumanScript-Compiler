@@ -222,3 +222,35 @@ ExpressionList* addExpressionToList(ExpressionList* list, expression expr) {
     current->next = createExpressionNode(expr);
     return list;
 }
+
+bool validateTypeCompatibility(int declaredType, int expressionType) {
+    // Basic type equality check
+    if (declaredType == expressionType) {
+        return true;
+    }
+
+    // Special cases for numeric type compatibility
+    if ((declaredType == TYPE_FLOAT && expressionType == TYPE_INTEGER) ||
+        (declaredType == TYPE_INTEGER && expressionType == TYPE_FLOAT)) {
+        return true;
+    }
+
+    // Array type compatibility
+    if (declaredType == TYPE_ARRAY && expressionType == TYPE_ARRAY) {
+        // Additional array element type checking could be added here
+        return true;
+    }
+
+    return false;
+}
+int countParameters(SymbolEntry* paramList) {
+    int count = 0;
+    SymbolEntry* current = paramList;
+    
+    while (current != NULL) {
+        count++;
+        current = current->next;
+    }
+    
+    return count;
+}

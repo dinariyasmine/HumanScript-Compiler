@@ -107,8 +107,9 @@ extern int yylex();
 int currentColumn = 1;
 SymbolTable *symbolTable;
 pile * stack;
-quad * q;
+quad *q = NULL;  // Change from local to global variable
 int qc = 1;
+
 int currentArrayType = -1;
 void yysuccess(char *s);
 void yyerror(const char *s);
@@ -254,6 +255,24 @@ Declaration:
         getTypeString($2, typeStr);
         insertSymbol(symbolTable, $3, typeStr, value, 0, false, true);
         
+        // Generate quadruplet for initialization
+        char tempValue[30];
+        switch($2) {
+            case TYPE_INTEGER:
+                sprintf(tempValue, "%d", value.intValue);
+                break;
+            case TYPE_FLOAT:
+                sprintf(tempValue, "%.2f", value.floatValue);
+                break;
+            case TYPE_STRING:
+                sprintf(tempValue, "\"%s\"", value.stringValue);
+                break;
+            case TYPE_BOOLEAN:
+                sprintf(tempValue, "%s", value.intValue ? "true" : "false");
+                break;
+        }
+        insererQuadreplet(&q, ":=", tempValue, "", $3, qc++);
+        
         $$ = lookupSymbolByName(symbolTable, $3, 0);
         printf("Symbol '%s' inserted successfully\n", $3);
     }
@@ -276,6 +295,25 @@ Declaration:
         char typeStr[MAX_TYPE_LENGTH];
         getTypeString($2, typeStr);
         insertSymbol(symbolTable, $3, typeStr, value, 0, true, true);
+        
+        // Generate quadruplet for constant initialization
+        char tempValue[30];
+        switch($2) {
+            case TYPE_INTEGER:
+                sprintf(tempValue, "%d", value.intValue);
+                break;
+            case TYPE_FLOAT:
+                sprintf(tempValue, "%.2f", value.floatValue);
+                break;
+            case TYPE_STRING:
+                sprintf(tempValue, "\"%s\"", value.stringValue);
+                break;
+            case TYPE_BOOLEAN:
+                sprintf(tempValue, "%s", value.intValue ? "true" : "false");
+                break;
+        }
+        insererQuadreplet(&q, ":=", tempValue, "", $3, qc++);
+        
         printf("Constant '%s' declared successfully\n", $3);
     }
     | Type ID {
@@ -295,6 +333,25 @@ Declaration:
         char typeStr[MAX_TYPE_LENGTH];
         getTypeString($1, typeStr);
         insertSymbol(symbolTable, $2, typeStr, value, 0, false, false);
+        
+        // Generate quadruplet for default initialization
+        char defaultValue[30];
+        switch($1) {
+            case TYPE_INTEGER:
+                strcpy(defaultValue, "0");
+                break;
+            case TYPE_FLOAT:
+                strcpy(defaultValue, "0.0");
+                break;
+            case TYPE_BOOLEAN:
+                strcpy(defaultValue, "false");
+                break;
+            case TYPE_STRING:
+                strcpy(defaultValue, "\"\"");
+                break;
+        }
+        insererQuadreplet(&q, ":=", defaultValue, "", $2, qc++);
+        
         printf("Symbol '%s' declared without initialization\n", $2);
     }
     | LET ARRAY Type ID BE ArrayLiteral {
@@ -302,8 +359,7 @@ Declaration:
         printf("Current array base type: %d\n", currentArrayType);
         
         // Check for existing symbol
-        SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $4, 0);
-        if (existingSymbol != NULL) {
+        if (symbolExistsByName(symbolTable, $4, 0)) {
             yyerror("Cannot redeclare identifier");
             YYERROR;
         }
@@ -334,10 +390,23 @@ Declaration:
         getTypeString(TYPE_ARRAY, typeStr);
         
         insertSymbol(symbolTable, $4, typeStr, value, 0, false, true);
+        
+        // Generate array declaration quadruplet
+        char arraySize[30];
+        sprintf(arraySize, "%d", arr->length);
+        insererQuadreplet(&q, "ARRAY", $4, arraySize, "", qc++);
+        
+        // Generate quadruplets for each array element
+        for(size_t i = 0; i < arr->length; i++) {
+            char index[30], elemValue[255];
+            sprintf(index, "%zu", i);
+            sprintf(elemValue, "%s", arr->data[i].stringValue);
+            insererQuadreplet(&q, "SET_ELEM", $4, index, elemValue, qc++);
+        }
         printf("Array '%s' declared successfully.\n", $4);
     }
+    ;
 
-/* Type definitions including array and dict */
 Type:
     INT     { 
         $$ = TYPE_INTEGER; 
@@ -369,29 +438,122 @@ Type:
 
 /* Affectation simple */
 Assignment:
-    ID EQUAL Expression 
+    ID EQUAL Expression {
+        // Check if identifier exists
+        SymbolEntry *symbol = lookupSymbolByName(symbolTable, $1, 0);
+        if (!symbol) {
+            yyerror("Undefined identifier");
+            YYERROR;
+        }
+        
+        // Check if trying to modify a constant
+        if (symbol->isConst) {
+            yyerror("Cannot modify constant value");
+            YYERROR;
+        }
+        
+        // Get the type as integer from type string
+        int symbolType;
+        if (strcmp(symbol->type, "int") == 0) {
+            symbolType = TYPE_INTEGER;
+        } else if (strcmp(symbol->type, "float") == 0) {
+            symbolType = TYPE_FLOAT;
+        } else if (strcmp(symbol->type, "string") == 0) {
+            symbolType = TYPE_STRING;
+        } else if (strcmp(symbol->type, "boolean") == 0) {
+            symbolType = TYPE_BOOLEAN;
+        } else {
+            symbolType = -1; // Unknown type
+        }
+        
+        // Create variable structure for return value
+        variable var;
+        var.entry = symbol;
+        
+        // Update symbol value
+        SymbolValue newValue = {0};
+        if (!validateAndSetValue(&newValue, $3, symbolType)) {
+            yyerror("Type mismatch in assignment");
+            YYERROR;
+        }
+        
+        // Update symbol table
+        updateSymbolValue(symbolTable, symbol->id, newValue, 0);
+        
+        // Generate assignment quadruplet
+        char tempValue[30];
+        switch($3.type) {
+            case TYPE_INTEGER:
+                sprintf(tempValue, "%d", $3.integerValue);
+                break;
+            case TYPE_FLOAT:
+                sprintf(tempValue, "%.2f", $3.floatValue);
+                break;
+            case TYPE_STRING:
+                sprintf(tempValue, "\"%s\"", $3.stringValue);
+                break;
+            case TYPE_BOOLEAN:
+                sprintf(tempValue, "%s", $3.booleanValue ? "true" : "false");
+                break;
+        }
+        insererQuadreplet(&q, ":=", tempValue, "", $1, qc++);
+        
+        $$ = var;
+    }
     ;
 
-
-
-
-/* Instruction d'affichage */
 PrintStatement:
-    PRINT Expression
+    PRINT Expression {
+        // Generate print quadruplet
+        char tempValue[30];
+        switch($2.type) {
+            case TYPE_INTEGER:
+                sprintf(tempValue, "%d", $2.integerValue);
+                break;
+            case TYPE_FLOAT:
+                sprintf(tempValue, "%.2f", $2.floatValue);
+                break;
+            case TYPE_STRING:
+                sprintf(tempValue, "\"%s\"", $2.stringValue);
+                break;
+            case TYPE_BOOLEAN:
+                sprintf(tempValue, "%s", $2.booleanValue ? "true" : "false");
+                break;
+        }
+        insererQuadreplet(&q, "PRINT", tempValue, "", "", qc++);
+    }
     ;
+
 InputStatement:
-    INPUT Expression TO ID
-;
+    INPUT Expression TO ID 
+    ;
+
 
 /* Déclaration de fonction */
 Function:
     FUNCTION ID COLON Type LPAREN ParameterList RPAREN LBRACE StatementList RBRACE {
-        printf("Fonction correcte syntaxiquement\n");
-    }
-    | FUNCTION ID COLON LPAREN ParameterList RPAREN LBRACE StatementList RBRACE {
-        printf("Procédure correcte syntaxiquement\n");
+        // Create function entry in symbol table
+        SymbolValue value = {0};
+        char typeStr[MAX_TYPE_LENGTH];
+        getTypeString($4, typeStr);
+        
+        // Generate function start quadruplet
+        insererQuadreplet(&q, "FUNC_START", $2, "", "", qc++);
+        
+        // Store function parameters
+        if ($6 != NULL) {
+            char paramCount[10];
+            sprintf(paramCount, "%d", countParameters($6));
+            insererQuadreplet(&q, "PARAM_COUNT", $2, paramCount, "", qc++);
+        }
+        
+        // Generate function end quadruplet
+        insererQuadreplet(&q, "FUNC_END", $2, "", "", qc++);
+        
+        insertSymbol(symbolTable, $2, typeStr, value, 0, false, true);
     }
     ;
+
 
 /* Appel de fonction */
 FunctionCall:
@@ -426,17 +588,70 @@ Condition:
     ;
 
 SimpleIf:
-    IF Expression COLON StatementList ENDIF
+    IF Expression COLON StatementList ENDIF {
+        // Generate quadruplet for IF condition
+        insererQuadreplet(&q, "BZ", "", "", "0", qc++);  // Branch if false
+        int conditionPos = qc - 1;
+        
+        // Update the branch position after statements
+        char jumpLabel[20];
+        sprintf(jumpLabel, "%d", qc);
+        updateQuadreplet(q, conditionPos, jumpLabel);
+    }
     ;
 
 IfWithElse:
-    IF Expression COLON StatementList ElseIfList
+    IF Expression COLON StatementList ElseIfList {
+        // Generate quadruplet for IF condition
+        insererQuadreplet(&q, "BZ", "", "", "0", qc++);
+        int conditionPos = qc - 1;
+        
+        // Insert jump quadruplet to skip else part
+        insererQuadreplet(&q, "BR", "", "", "0", qc++);
+        int skipPos = qc - 1;
+        
+        // Update the condition jump position
+        char condLabel[20];
+        sprintf(condLabel, "%d", qc);
+        updateQuadreplet(q, conditionPos, condLabel);
+        
+        // Update the skip jump position
+        char skipLabel[20];
+        sprintf(skipLabel, "%d", qc);
+        updateQuadreplet(q, skipPos, skipLabel);
+    }
     ;
 
 ElseIfList:
-    ELSE COLON StatementList ENDIF
-    | ELSEIF Expression COLON StatementList ElseIfList
+    ELSE COLON StatementList ENDIF {
+        // Generate jump to end of if-else
+        insererQuadreplet(&q, "BR", "", "", "0", qc++);
+        int endPos = qc - 1;
+        
+        // Update jump position
+        char endLabel[20];
+        sprintf(endLabel, "%d", qc);
+        updateQuadreplet(q, endPos, endLabel);
+    }
+    | ELSEIF Expression COLON StatementList ElseIfList {
+        // Generate quadruplet for ELSEIF condition
+        insererQuadreplet(&q, "BZ", "", "", "0", qc++);
+        int conditionPos = qc - 1;
+        
+        // Insert jump quadruplet
+        insererQuadreplet(&q, "BR", "", "", "0", qc++);
+        int skipPos = qc - 1;
+        
+        // Update positions
+        char condLabel[20], skipLabel[20];
+        sprintf(condLabel, "%d", qc);
+        updateQuadreplet(q, conditionPos, condLabel);
+        sprintf(skipLabel, "%d", qc);
+        updateQuadreplet(q, skipPos, skipLabel);
+    }
     ;
+
+
 
 /* Structure Switch-Case */
 SwitchStatement:
@@ -546,7 +761,7 @@ int main(void) {
         fclose(yyin);
         return 1;
     }
-
+          
     printf("Lancement de l'analyse syntaxique...\n");
     int result = yyparse();
     
@@ -559,6 +774,7 @@ int main(void) {
     // Free the symbol table after parsing is complete
     listAllSymbols(symbolTable);  
     freeSymbolTable(symbolTable);
+    afficherQuad(q);
 
     // Close the input file
     fclose(yyin);
