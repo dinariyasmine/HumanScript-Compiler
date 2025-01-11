@@ -235,11 +235,8 @@ Declaration:
         
         // Check for existing symbol and handle redeclaration
         SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $3, 0);
+        
         if (existingSymbol != NULL) {
-            if (existingSymbol->isConst) {
-                yyerror("Cannot redeclare constant");
-                YYERROR;
-            }
             printf("Warning: Redeclaring '%s'. Previous value will be overwritten.\n", $3);
             deleteSymbolByName(symbolTable, $3);
         }
