@@ -181,17 +181,34 @@ Expression:
     SimpleExpression {
         $$ = $1;
     }
+    |Expression:
     | Expression ADD Expression {
-        $$.type = validateArithmeticOperation($1, $3);
-        if ($$.type == TYPE_INTEGER) {
-            $$.integerValue = $1.integerValue + $3.integerValue;
-        } else if ($$.type == TYPE_FLOAT) {
-            $$.floatValue = $1.floatValue + $3.floatValue;
+        // Handle string concatenation
+        if ($1.type == TYPE_STRING && $3.type == TYPE_STRING) {
+            $$.type = TYPE_STRING;
+            char result[255];
+            snprintf(result, sizeof(result), "%s%s", $1.stringValue, $3.stringValue);
+            strncpy($$.stringValue, result, 254);
+            $$.stringValue[254] = '\0';
+            
+            char temp[20];
+            sprintf(temp, "t%d", qc);
+            insererQuadreplet(&q, "CONCAT", $1.stringValue, $3.stringValue, temp, qc++);
         }
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        insererQuadreplet(&q, "+", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+        // Existing arithmetic addition code
+        else {
+            $$.type = validateArithmeticOperation($1, $3);
+            if ($$.type == TYPE_INTEGER) {
+                $$.integerValue = $1.integerValue + $3.integerValue;
+            } else if ($$.type == TYPE_FLOAT) {
+                $$.floatValue = $1.floatValue + $3.floatValue;
+            }
+            char temp[20];
+            sprintf(temp, "t%d", qc);
+            insererQuadreplet(&q, "+", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+        }
     }
+
     | Expression SUB Expression {
         $$.type = validateArithmeticOperation($1, $3);
         if ($$.type == TYPE_INTEGER) {
