@@ -38,4 +38,7 @@ ExpressionList* addExpressionToList(ExpressionList* list, expression expr);
 ExpressionList* createExpressionNode(expression expr);
 bool validateTypeCompatibility(int declaredType, int expressionType);
 int countParameters(SymbolEntry* paramList) ;
+int compareExpressions(expression exp1, expression exp2) ;
+char* getExpressionValue(expression exp);
+int validateArithmeticOperation(expression exp1, expression exp2);
 #endif // SEMANTIC_H

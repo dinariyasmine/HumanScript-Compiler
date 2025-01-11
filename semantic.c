@@ -254,3 +254,73 @@ int countParameters(SymbolEntry* paramList) {
     
     return count;
 }
+// Validates arithmetic operations between two expressions
+int validateArithmeticOperation(expression exp1, expression exp2) {
+    // If both operands are integers, result is integer
+    if (exp1.type == TYPE_INTEGER && exp2.type == TYPE_INTEGER) {
+        return TYPE_INTEGER;
+    }
+    // If either operand is float, result is float 
+    else if (exp1.type == TYPE_FLOAT || exp2.type == TYPE_FLOAT) {
+        return TYPE_FLOAT;
+    }
+    // Invalid operation between incompatible types
+    yyerror("Invalid operand types for arithmetic operation");
+    return -1;
+}
+
+// Gets string representation of expression value
+char* getExpressionValue(expression exp) {
+    static char buffer[32];
+    switch(exp.type) {
+        case TYPE_INTEGER:
+            sprintf(buffer, "%d", exp.integerValue);
+            break;
+        case TYPE_FLOAT:
+            sprintf(buffer, "%f", exp.floatValue);
+            break;
+        case TYPE_STRING:
+            sprintf(buffer, "\"%s\"", exp.stringValue);
+            break;
+        case TYPE_BOOLEAN:
+            sprintf(buffer, "%s", exp.booleanValue ? "true" : "false");
+            break;
+        default:
+            strcpy(buffer, "");
+    }
+    return buffer;
+}
+
+// Compares two expressions and returns:
+// -1 if exp1 < exp2
+// 0 if exp1 == exp2 
+// 1 if exp1 > exp2
+int compareExpressions(expression exp1, expression exp2) {
+    if (exp1.type != exp2.type) {
+        yyerror("Cannot compare expressions of different types");
+        return 0;
+    }
+
+    switch(exp1.type) {
+        case TYPE_INTEGER:
+            if (exp1.integerValue < exp2.integerValue) return -1;
+            if (exp1.integerValue > exp2.integerValue) return 1;
+            return 0;
+        
+        case TYPE_FLOAT:
+            if (exp1.floatValue < exp2.floatValue) return -1;
+            if (exp1.floatValue > exp2.floatValue) return 1;
+            return 0;
+
+        case TYPE_STRING:
+            return strcmp(exp1.stringValue, exp2.stringValue);
+
+        case TYPE_BOOLEAN:
+            if (exp1.booleanValue == exp2.booleanValue) return 0;
+            return exp1.booleanValue ? 1 : -1;
+
+        default:
+            yyerror("Cannot compare expressions of this type");
+            return 0;
+    }
+}

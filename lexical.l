@@ -98,9 +98,12 @@ void erreurLexical() {
  
 \"([^\"\\]|\\.)*\" { 
     avancerCurseur();
-    printf("Chaîne de caractères: %s\n", yytext); 
+    printf("Chaîne de caractères: %s\n", yytext);
+    // Remove quotes and copy the string value
+    strncpy(yylval.stringValue, yytext + 1, sizeof(yylval.stringValue) - 1);
+    yylval.stringValue[strlen(yylval.stringValue) - 1] = '\0';  // Remove trailing quote
     return STRING_LITERAL; 
-} 
+}
  
 [ \t]+ {
     for (int i = 0; i < yyleng; i++) {

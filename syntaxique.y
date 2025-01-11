@@ -178,24 +178,153 @@ RepeatLoop:
 
 /* Expressions avec gestion des priorités */
 Expression:
-    SimpleExpression
-    | Expression ADD Expression
-    | Expression SUB Expression
-    | Expression MUL Expression
-    | Expression DIV Expression
-    | Expression INT_DIV Expression
-    | Expression MOD Expression
-    | Expression EQUAL Expression
-    | Expression NOT_EQUAL Expression
-    | Expression GREATER_THAN Expression
-    | Expression LESS_THAN Expression
-    | Expression GREATER_EQUAL Expression
-    | Expression LESS_EQUAL Expression
-    | Expression LOGICAL_AND Expression
-    | Expression LOGICAL_OR Expression
-    | LOGICAL_NOT Expression
-    | SUB Expression %prec UMINUS
+    SimpleExpression {
+        $$ = $1;
+    }
+    | Expression ADD Expression {
+        $$.type = validateArithmeticOperation($1, $3);
+        if ($$.type == TYPE_INTEGER) {
+            $$.integerValue = $1.integerValue + $3.integerValue;
+        } else if ($$.type == TYPE_FLOAT) {
+            $$.floatValue = $1.floatValue + $3.floatValue;
+        }
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "+", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression SUB Expression {
+        $$.type = validateArithmeticOperation($1, $3);
+        if ($$.type == TYPE_INTEGER) {
+            $$.integerValue = $1.integerValue - $3.integerValue;
+        } else if ($$.type == TYPE_FLOAT) {
+            $$.floatValue = $1.floatValue - $3.floatValue;
+        }
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "-", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression MUL Expression {
+        $$.type = validateArithmeticOperation($1, $3);
+        if ($$.type == TYPE_INTEGER) {
+            $$.integerValue = $1.integerValue * $3.integerValue;
+        } else if ($$.type == TYPE_FLOAT) {
+            $$.floatValue = $1.floatValue * $3.floatValue;
+        }
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "*", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression DIV Expression {
+        if ($3.type == TYPE_INTEGER && $3.integerValue == 0 || 
+            $3.type == TYPE_FLOAT && $3.floatValue == 0.0) {
+            yyerror("Division by zero");
+            YYERROR;
+        }
+        $$.type = TYPE_FLOAT;
+        $$.floatValue = ($1.type == TYPE_INTEGER ? $1.integerValue : $1.floatValue) / 
+                       ($3.type == TYPE_INTEGER ? $3.integerValue : $3.floatValue);
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "/", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression INT_DIV Expression {
+        if ($3.type == TYPE_INTEGER && $3.integerValue == 0) {
+            yyerror("Division by zero");
+            YYERROR;
+        }
+        $$.type = TYPE_INTEGER;
+        $$.integerValue = $1.integerValue / $3.integerValue;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "DIV", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression MOD Expression {
+        if ($3.type == TYPE_INTEGER && $3.integerValue == 0) {
+            yyerror("Modulo by zero");
+            YYERROR;
+        }
+        $$.type = TYPE_INTEGER;
+        $$.integerValue = $1.integerValue % $3.integerValue;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "MOD", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression EQUAL Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = compareExpressions($1, $3) == 0;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "==", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression NOT_EQUAL Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = compareExpressions($1, $3) != 0;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "!=", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression GREATER_THAN Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = compareExpressions($1, $3) > 0;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, ">", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression LESS_THAN Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = compareExpressions($1, $3) < 0;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "<", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression GREATER_EQUAL Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = compareExpressions($1, $3) >= 0;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, ">=", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression LESS_EQUAL Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = compareExpressions($1, $3) <= 0;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "<=", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression LOGICAL_AND Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = $1.booleanValue && $3.booleanValue;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "AND", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | Expression LOGICAL_OR Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = $1.booleanValue || $3.booleanValue;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "OR", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+    }
+    | LOGICAL_NOT Expression {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = !$2.booleanValue;
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "NOT", getExpressionValue($2), "", temp, qc++);
+    }
+    | SUB Expression %prec UMINUS {
+        $$.type = $2.type;
+        if ($2.type == TYPE_INTEGER) {
+            $$.integerValue = -$2.integerValue;
+        } else if ($2.type == TYPE_FLOAT) {
+            $$.floatValue = -$2.floatValue;
+        }
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "NEG", getExpressionValue($2), "", temp, qc++);
+    }
     ;
+
 
 /* Expressions simples : valeurs, identificateurs, tableaux... */
 SimpleExpression:
@@ -207,17 +336,35 @@ SimpleExpression:
         $$.type = TYPE_FLOAT;
         $$.floatValue = $1;  
     }
+SimpleExpression:
     | STRING_LITERAL {
         $$.type = TYPE_STRING;
         strncpy($$.stringValue, $1, 254);
         $$.stringValue[254] = '\0';
     }
     | ID {
-        $$.type = TYPE_STRING;
-        strncpy($$.stringValue, $1, 254);  
-        $$.stringValue[254] = '\0';
+        SymbolEntry *symbol = lookupSymbolByName(symbolTable, $1, 0);
+        if (!symbol) {
+            yyerror("Undefined identifier");
+            YYERROR;
+        }
         
+        if (strcmp(symbol->type, "string") == 0) {
+            $$.type = TYPE_STRING;
+            strncpy($$.stringValue, symbol->value.stringValue, 254);
+            $$.stringValue[254] = '\0';
+        } else if (strcmp(symbol->type, "int") == 0) {
+            $$.type = TYPE_INTEGER;
+            $$.integerValue = symbol->value.intValue;
+        } else if (strcmp(symbol->type, "float") == 0) {
+            $$.type = TYPE_FLOAT;
+            $$.floatValue = symbol->value.floatValue;
+        } else if (strcmp(symbol->type, "boolean") == 0) {
+            $$.type = TYPE_BOOLEAN;
+            $$.booleanValue = symbol->value.intValue != 0;
+        }
     }
+
     | TRUE {
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = true;
@@ -226,9 +373,13 @@ SimpleExpression:
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = false;
     }
-    | ArrayLiteral
+    | ArrayLiteral {
+        $$ = $1;
+    }
     | DictLiteral
-    | LPAREN Expression RPAREN { $$ = $2; }
+    | LPAREN Expression RPAREN { 
+        $$ = $2; 
+    }
     | FunctionCall
     ;
 
