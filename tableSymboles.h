@@ -5,7 +5,7 @@
 #include <stdlib.h> 
 #include <string.h> 
 #include <stdio.h> 
-#include <stdbool.h>  // Include for bool type
+#include <stdbool.h>  
 
 
 
@@ -25,37 +25,43 @@
 
 // Definitions de constantes
 #define HASH_TABLE_SIZE 101 // Taille de la table de hachage (un nombre premier pour une meilleure distribution des hachages)
+// Forward declare ArrayType
+typedef struct ArrayType ArrayType;
 
-typedef struct {
-    int length;     // Number of elements in the array
-    void* elements; // Pointer to the array data (could be any type)
-} ArrayType1;
-// Union pour stocker la valeur du symbole
 typedef union {
     int intValue;
     float floatValue;
-    ArrayType1* arrayValue;
-    char stringValue[MAX_NAME_LENGTH]; // Fixed-size array for string values
+    ArrayType* arrayValue;
+    char stringValue[MAX_NAME_LENGTH];
 } SymbolValue;
+
+typedef struct ArrayType {
+    int elementType;    // Type of array elements
+    size_t length;      // Current length of array
+    size_t capacity;    // Allocated capacity
+    SymbolValue* data;  // Dynamic array of values
+} ArrayType;
+
 
 
 // Structure representant une entree de symbole dans la table des symboles
 typedef struct SymbolEntry {
-    int id;                    // Identifiant unique pour le symbole
-    char name[MAX_NAME_LENGTH]; // Nom lisible du symbole (fixed-size array)
-    char type[MAX_TYPE_LENGTH]; // Type de donnees du symbole (fixed-size array)
-    SymbolValue value;         // Valeur du symbole (union)
-    bool isConst;              // Indique si le symbole est une constante
-    bool isInitialized;        // Indique si le symbole est initialisé
-    int scopeLevel;            // Niveau de portee du symbole
-    struct SymbolEntry *next;  // Pointeur vers l'entree suivante pour la gestion des collisions (chainage dans les buckets)
+    int id;
+    char name[MAX_NAME_LENGTH];
+    char type[MAX_TYPE_LENGTH];
+    SymbolValue value;
+    bool isConst;
+    bool isInitialized;
+    int scopeLevel;
+    struct SymbolEntry *next;
 } SymbolEntry;
 
 // Structure representant la table des symboles
 typedef struct SymbolTable {
-    SymbolEntry *buckets[HASH_TABLE_SIZE]; // Tableau des buckets pour une recherche rapide
-    int nextId;                            // Compteur pour generer des identifiants uniques pour les symboles
+    SymbolEntry *buckets[HASH_TABLE_SIZE];
+    int nextId;
 } SymbolTable;
+
 
 SymbolTable *createSymbolTable();
 void insertSymbol(SymbolTable *table, const char *name, const char *type, SymbolValue value, int scopeLevel, bool isConst, bool isInitialized);

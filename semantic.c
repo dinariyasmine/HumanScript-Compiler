@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#define INITIAL_CAPACITY 10  // or any other suitable value
+
 
 
 void valeurToString(expression expression, char * valeur){
@@ -29,19 +31,38 @@ void valeurToString(expression expression, char * valeur){
     }
 }
 void getTypeString(int type, char* typeStr) {
+    printf("Getting type string for type: %d\n", type);
     switch(type) {
-        case TYPE_INTEGER: strncpy(typeStr, "int", MAX_TYPE_LENGTH - 1); break;
-        case TYPE_FLOAT: strncpy(typeStr, "float", MAX_TYPE_LENGTH - 1); break;
-        case TYPE_STRING: strncpy(typeStr, "string", MAX_TYPE_LENGTH - 1); break;
-        case TYPE_BOOLEAN: strncpy(typeStr, "bool", MAX_TYPE_LENGTH - 1); break;
-        case TYPE_ARRAY: strncpy(typeStr, "array", MAX_TYPE_LENGTH - 1); break;
-        case TYPE_DICT: strncpy(typeStr, "dict", MAX_TYPE_LENGTH - 1); break;
-        default: strncpy(typeStr, "unknown", MAX_TYPE_LENGTH - 1);
+        case TYPE_BOOLEAN:
+            strncpy(typeStr, "bool", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_INTEGER:
+            strncpy(typeStr, "int", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_FLOAT:
+            strncpy(typeStr, "float", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_STRING:
+            strncpy(typeStr, "string", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_ARRAY:
+            strncpy(typeStr, "array", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_DICT:
+            strncpy(typeStr, "dict", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_FUNCTION:
+            strncpy(typeStr, "function", MAX_TYPE_LENGTH - 1);
+            break;
+        case TYPE_CONST:
+            strncpy(typeStr, "const", MAX_TYPE_LENGTH - 1);
+            break;
+        default:
+            snprintf(typeStr, MAX_TYPE_LENGTH - 1, "unknown(%d)", type);
     }
     typeStr[MAX_TYPE_LENGTH - 1] = '\0';
-}
-
-bool validateAndSetValue(SymbolValue* value, expression expr, int declaredType) {
+    printf("Type string result: %s\n", typeStr);
+}bool validateAndSetValue(SymbolValue* value, expression expr, int declaredType) {
     if (expr.type != declaredType) {
         char expectedType[20], gotType[20];
         getTypeString(declaredType, expectedType);
@@ -98,215 +119,106 @@ void handleTypeError(const char* expectedType, const char* gotType) {
              expectedType, gotType);
     yyerror(errorMsg);
 }
-
-// Add to semantic.c
-
-/* Array Operations */
-ArrayType* createArray(int elementType) {
-    ArrayType* arr = malloc(sizeof(ArrayType));
+ArrayType* createArrayFromExprList(ExpressionList* exprList, int baseType) {
+    printf("Creating array from expression list with base type: %d\n", baseType);
+    
+    if (!exprList) {
+        printf("Expression list is empty.\n");
+        return NULL;
+    }
+    
+    ArrayType* arr = createArray(baseType);
     if (!arr) {
-        printf("Failed to allocate array\n");
+        printf("Error: Array creation failed.\n");
         return NULL;
     }
     
-    arr->elementType = elementType;
-    arr->length = 0;
-    arr->capacity = 10;  // Initial capacity
-    arr->data = malloc(arr->capacity * sizeof(SymbolValue));
-    
-    if (!arr->data) {
-        printf("Failed to allocate array data\n");
-        free(arr);
-        return NULL;
-    }
-    
-    return arr;
-}
-
-ArrayType* createArrayFromExprList(expression exprList) {
-    // This function would be called from your parser when creating an array literal
-    // The expression list would be passed in from your grammar rules
-    ArrayType* arr = createArray(exprList.type);  // Use first element's type
-    if (!arr) return NULL;
-    
-    // You'll need to implement logic to iterate through your expression list
-    // and add each element to the array
-    // This will depend on how you're storing the expression list in your parser
-    
-    return arr;
-}
-
-void arrayPush(ArrayType* arr, SymbolValue value) {
-    if (!arr) return;
-    
-    // Check if we need to grow the array
-    if (arr->length >= arr->capacity) {
-        size_t newCapacity = arr->capacity * 2;
-        SymbolValue* newData = realloc(arr->data, newCapacity * sizeof(SymbolValue));
-        if (!newData) {
-            printf("Failed to resize array\n");
-            return;
+    ExpressionList* current = exprList;
+    while (current != NULL) {
+        expression expr = current->expr;
+        printf("Processing element of type %d (expected %d)\n", expr.type, baseType);
+        
+        if (expr.type != baseType) {
+            char expectedType[MAX_TYPE_LENGTH];
+            char gotType[MAX_TYPE_LENGTH];
+            getTypeString(baseType, expectedType);
+            getTypeString(expr.type, gotType);
+            printf("Type mismatch: expected %s, got %s\n", expectedType, gotType);
+            freeArray(arr);
+            return NULL;
         }
-        arr->data = newData;
-        arr->capacity = newCapacity;
+        
+        SymbolValue value = {0};
+        switch (baseType) {
+            case TYPE_INTEGER:
+                value.intValue = expr.integerValue;
+                break;
+            case TYPE_FLOAT:
+                value.floatValue = expr.floatValue;
+                break;
+            case TYPE_BOOLEAN:
+                value.intValue = expr.booleanValue ? 1 : 0;
+                break;
+            case TYPE_STRING:
+                strncpy(value.stringValue, expr.stringValue, MAX_NAME_LENGTH - 1);
+                value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
+                break;
+            default:
+                printf("Error: Unsupported base type: %d\n", baseType);
+                freeArray(arr);
+                return NULL;
+        }
+        
+        arrayPush(arr, value);
+        current = current->next;
     }
     
-    // Add the new value
-    arr->data[arr->length] = value;
-    arr->length++;
+    return arr;
+}
+ArrayType* createArray(int baseType) {
+    printf("Creating array with base type: %d\n", baseType);
+    ArrayType* arr = malloc(sizeof(ArrayType));
+    if (arr) {
+        arr->elementType = baseType;
+        arr->length = 0;
+        arr->capacity = INITIAL_CAPACITY;
+        arr->data = malloc(sizeof(SymbolValue) * arr->capacity);
+        if (!arr->data) {
+            free(arr);
+            return NULL;
+        }
+        printf("Array created successfully with base type %d\n", arr->elementType);
+    }
+    return arr;
+}
+void arrayPush(ArrayType* arr, SymbolValue value) {
+    // Push value to the array, resizing if necessary
+    if (arr->length >= arr->capacity) {
+        arr->capacity *= 2;
+        arr->data = realloc(arr->data, sizeof(SymbolValue) * arr->capacity);
+    }
+    arr->data[arr->length++] = value;
 }
 
 void freeArray(ArrayType* arr) {
-    if (!arr) return;
-    free(arr->data);
-    free(arr);
-}
-
-/* Dictionary Operations */
-DictType* createDict(int keyType, int valueType) {
-    DictType* dict = malloc(sizeof(DictType));
-    if (!dict) {
-        printf("Failed to allocate dictionary\n");
-        return NULL;
+    // Free memory allocated for the array
+    if (arr) {
+        free(arr->data);
+        free(arr);
     }
-    
-    dict->keyType = keyType;
-    dict->valueType = valueType;
-    dict->size = 0;
-    dict->buckets = calloc(HASH_TABLE_SIZE, sizeof(DictEntry*));
-    
-    if (!dict->buckets) {
-        printf("Failed to allocate dictionary buckets\n");
-        free(dict);
-        return NULL;
-    }
-    
-    return dict;
+}
+ExpressionList* createExpressionNode(expression expr) {
+    ExpressionList* node = malloc(sizeof(ExpressionList));
+    node->expr = expr;
+    node->next = NULL;
+    return node;
 }
 
-DictType* createDictFromItems(expression items) {
-    // This function would be called from your parser when creating a dictionary literal
-    // The items expression would contain key-value pairs from your grammar rules
-    // You'll need to implement the logic to process these based on your grammar structure
-    
-    // For now, we'll just create an empty dictionary
-    return createDict(TYPE_STRING, TYPE_STRING); // Default types, adjust as needed
-}
-
-size_t hashValue(SymbolValue key, int keyType) {
-    size_t hash = 0;
-    switch (keyType) {
-        case TYPE_STRING:
-            // Simple string hash
-            for (const char* p = key.stringValue; *p; p++) {
-                hash = hash * 31 + *p;
-            }
-            break;
-            
-        case TYPE_INTEGER:
-            hash = (size_t)key.intValue;
-            break;
-            
-        case TYPE_FLOAT:
-            // Convert float to bits for hashing
-            hash = (size_t)key.floatValue;
-            break;
-            
-        default:
-            printf("Unsupported key type for hashing\n");
-            return 0;
-    }
-    return hash % HASH_TABLE_SIZE;
-}
-
-void dictSet(DictType* dict, SymbolValue key, SymbolValue value) {
-    if (!dict) return;
-    
-    size_t hash = hashValue(key, dict->keyType);
-    
-    // Look for existing key
-    DictEntry* current = dict->buckets[hash];
-    while (current) {
-        bool keysMatch = false;
-        
-        // Compare keys based on type
-        switch (dict->keyType) {
-            case TYPE_STRING:
-                keysMatch = (strcmp(current->key.stringValue, key.stringValue) == 0);
-                break;
-            case TYPE_INTEGER:
-                keysMatch = (current->key.intValue == key.intValue);
-                break;
-            case TYPE_FLOAT:
-                keysMatch = (current->key.floatValue == key.floatValue);
-                break;
-        }
-        
-        if (keysMatch) {
-            // Update existing value
-            current->value = value;
-            return;
-        }
+ExpressionList* addExpressionToList(ExpressionList* list, expression expr) {
+    ExpressionList* current = list;
+    while (current->next != NULL) {
         current = current->next;
     }
-    
-    // Create new entry
-    DictEntry* newEntry = malloc(sizeof(DictEntry));
-    if (!newEntry) {
-        printf("Failed to allocate dictionary entry\n");
-        return;
-    }
-    
-    newEntry->key = key;
-    newEntry->value = value;
-    newEntry->next = dict->buckets[hash];
-    dict->buckets[hash] = newEntry;
-    dict->size++;
-}
-
-SymbolValue* dictGet(DictType* dict, SymbolValue key) {
-    if (!dict) return NULL;
-    
-    size_t hash = hashValue(key, dict->keyType);
-    DictEntry* current = dict->buckets[hash];
-    
-    while (current) {
-        bool keysMatch = false;
-        
-        switch (dict->keyType) {
-            case TYPE_STRING:
-                keysMatch = (strcmp(current->key.stringValue, key.stringValue) == 0);
-                break;
-            case TYPE_INTEGER:
-                keysMatch = (current->key.intValue == key.intValue);
-                break;
-            case TYPE_FLOAT:
-                keysMatch = (current->key.floatValue == key.floatValue);
-                break;
-        }
-        
-        if (keysMatch) {
-            return &current->value;
-        }
-        current = current->next;
-    }
-    
-    return NULL;
-}
-
-void freeDict(DictType* dict) {
-    if (!dict) return;
-    
-    // Free all entries in all buckets
-    for (size_t i = 0; i < HASH_TABLE_SIZE; i++) {
-        DictEntry* current = dict->buckets[i];
-        while (current) {
-            DictEntry* next = current->next;
-            free(current);
-            current = next;
-        }
-    }
-    
-    free(dict->buckets);
-    free(dict);
+    current->next = createExpressionNode(expr);
+    return list;
 }

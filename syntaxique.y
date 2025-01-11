@@ -48,6 +48,7 @@ void yyerror(const char *s);
     struct SymbolEntry* entry;
     expression expression;
     variable variable;
+    ExpressionList* exprList;
 }
 
 %token <type> INT FLOAT BOOL STR 
@@ -76,7 +77,8 @@ void yyerror(const char *s);
 %token COMMENT
 
 /* Type definitions for non-terminals */
-%type <expression> Expression SimpleExpression ExpressionList
+%type <expression> Expression SimpleExpression
+%type <exprList> ExpressionList
 %type <expression> ArrayLiteral
 %type <expression> DictLiteral
 %type <expression> DictItems
@@ -107,7 +109,7 @@ SymbolTable *symbolTable;
 pile * stack;
 quad * q;
 int qc = 1;
-
+int currentArrayType = -1;
 void yysuccess(char *s);
 void yyerror(const char *s);
 void showLexicalError();
@@ -211,9 +213,9 @@ SimpleExpression:
     }
     | ID {
         $$.type = TYPE_STRING;
-        strncpy($$.stringValue, $1, 254);  // Now $1 is directly the string
+        strncpy($$.stringValue, $1, 254);  
         $$.stringValue[254] = '\0';
-        // Note: You might want to look up the actual type from symbol table here
+        
     }
     | TRUE {
         $$.type = TYPE_BOOLEAN;
@@ -296,49 +298,75 @@ Declaration:
         printf("Symbol '%s' declared without initialization\n", $2);
     }
     | LET ARRAY Type ID BE ArrayLiteral {
-    printf("Array declaration with initialization\n");
-
-    // Check for existing symbol and handle redeclaration
-    SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $4, 0);
-    if (existingSymbol != NULL) {
-        yyerror("Cannot redeclare identifier");
-        YYERROR;
+        printf("Array declaration with initialization started.\n");
+        printf("Current array base type: %d\n", currentArrayType);
+        
+        // Check for existing symbol
+        SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $4, 0);
+        if (existingSymbol != NULL) {
+            yyerror("Cannot redeclare identifier");
+            YYERROR;
+        }
+        
+        // Verify array initialization
+        ArrayType* arr = (ArrayType*)$6.data;
+        if (!arr) {
+            printf("Error: Array initialization failed for identifier '%s'.\n", $4);
+            yyerror("Invalid array initialization");
+            YYERROR;
+        }
+        
+        // Verify array type matches declared type
+        if (arr->elementType != currentArrayType) {
+            char expectedType[MAX_TYPE_LENGTH];
+            char gotType[MAX_TYPE_LENGTH];
+            getTypeString(currentArrayType, expectedType);
+            getTypeString(arr->elementType, gotType);
+            printf("Error: Array type mismatch. Expected %s, got %s\n", expectedType, gotType);
+            yyerror("Array type mismatch");
+            YYERROR;
+        }
+        
+        // Insert into symbol table
+        SymbolValue value = {0};
+        value.arrayValue = arr;
+        char typeStr[MAX_TYPE_LENGTH];
+        getTypeString(TYPE_ARRAY, typeStr);
+        
+        insertSymbol(symbolTable, $4, typeStr, value, 0, false, true);
+        printf("Array '%s' declared successfully.\n", $4);
     }
-
-    // Handle array initialization based on the base type
-    ArrayType* arr = (ArrayType*)$6.integerValue; // This is not correct - we need to use the base type here
-    if (!arr) {
-        yyerror("Invalid array initialization");
-        YYERROR;
-    }
-
-    // Insert array into the symbol table
-    SymbolValue value = {0};
-    value.arrayValue = arr;
-    char typeStr[MAX_TYPE_LENGTH];
-    getTypeString(TYPE_ARRAY, typeStr);
-    insertSymbol(symbolTable, $4, typeStr, value, 0, false, true);
-    printf("Array '%s' declared successfully\n", $4);
-}
-
-    ;
 
 /* Type definitions including array and dict */
 Type:
-    INT     { $$ = TYPE_INTEGER; }
-    | FLOAT { $$ = TYPE_FLOAT; }
-    | BOOL  { $$ = TYPE_BOOLEAN; }
-    | STR   { $$ = TYPE_STRING; }
-    | ARRAY Type {
-        $$ = TYPE_ARRAY;
-        printf("Array type of %d parsed\n", $2); // Base type of the array
+    INT     { 
+        $$ = TYPE_INTEGER; 
+        currentArrayType = TYPE_INTEGER;  // Set currentArrayType
+        printf("Setting type to INTEGER (%d)\n", TYPE_INTEGER);
     }
-    | DICT Type Type { $$ = TYPE_DICT; }
-;
+    | FLOAT { 
+        $$ = TYPE_FLOAT;
+        currentArrayType = TYPE_FLOAT;
+        printf("Setting type to FLOAT (%d)\n", TYPE_FLOAT);
+    }
+    | BOOL  { 
+        $$ = TYPE_BOOLEAN;
+        currentArrayType = TYPE_BOOLEAN;
+        printf("Setting type to BOOLEAN (%d)\n", TYPE_BOOLEAN);
+    }
+    | STR   { 
+        $$ = TYPE_STRING;
+        currentArrayType = TYPE_STRING;
+        printf("Setting type to STRING (%d)\n", TYPE_STRING);
+    }
+    | ARRAY Type { 
+        $$ = TYPE_ARRAY;
+        printf("Setting ARRAY type with base type: %d\n", currentArrayType);
+        // currentArrayType is already set by the inner Type rule
+    }
+    | DICT 
+    ;
 
-
-
-/* Affectation simple */
 /* Affectation simple */
 Assignment:
     ID EQUAL Expression 
@@ -436,39 +464,48 @@ DefaultPart:
 /* Définition des littéraux tableau */
 ArrayLiteral:
     LBRACKET RBRACKET {
-        // Empty array, default initialization
+        printf("Creating empty array with base type: %d\n", currentArrayType);
+        if (currentArrayType < 0) {
+            yyerror("Invalid array base type");
+            YYERROR;
+        }
         $$.type = TYPE_ARRAY;
-        ArrayType* arr = createArray(TYPE_INTEGER); // Default to int or based on $2
-        $$.integerValue = (intptr_t)arr;
+        ArrayType* arr = createArray(currentArrayType);
+        if (!arr) {
+            yyerror("Failed to create empty array");
+            YYERROR;
+        }
+        $$.data = arr;
     }
     | LBRACKET ExpressionList RBRACKET {
-        // Array with elements
+        printf("Creating array with base type: %d\n", currentArrayType);
+        if (currentArrayType < 0) {
+            yyerror("Invalid array base type");
+            YYERROR;
+        }
+        ArrayType* arr = createArrayFromExprList($2, currentArrayType);
+        if (!arr) {
+            yyerror("Failed to create array from expression list");
+            YYERROR;
+        }
         $$.type = TYPE_ARRAY;
-        ArrayType* arr = createArrayFromExprList($2); // Create array from expressions
-        $$.integerValue = (intptr_t)arr;
+        $$.data = arr;
     }
-;
-
+    ;
 
 DictLiteral:
-    LBRACE RBRACE {
-        // Empty dictionary
-        $$.type = TYPE_DICT;
-        DictType* dict = createDict($<type>0, $<type>1);  // Get key and value types from context
-        $$.integerValue = (intptr_t)dict;
-    }
-    | LBRACE DictItems RBRACE {
-        // Dictionary with items
-        $$.type = TYPE_DICT;
-        DictType* dict = createDictFromItems($2);
-        $$.integerValue = (intptr_t)dict;
-    }
+    LBRACE RBRACE
+    | LBRACE DictItems RBRACE
     ;
 
 /* Liste d'expressions pour les tableaux */
 ExpressionList:
-    Expression
-    | ExpressionList COMMA Expression
+    Expression {
+        $$ = createExpressionNode($1);
+    }
+    | ExpressionList COMMA Expression {
+        $$ = addExpressionToList($1, $3);
+    }
     ;
 
 

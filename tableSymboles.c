@@ -25,7 +25,13 @@ SymbolTable *createSymbolTable() {
 
 /*************************************** Inserer un Symbole *************************************************/
 void insertSymbol(SymbolTable *table, const char *name, const char *type, SymbolValue value, int scopeLevel, bool isConst, bool isInitialized) {
-    printf("Value being inserted into symbol table: %d\n", value.intValue);
+if (strcmp(type, "array") == 0 && value.arrayValue != NULL) {
+    printf("Inserting array '%s' with address: %p\n", name, (void*)value.arrayValue);
+} else {
+    printf("Inserting '%s' with value: %d\n", name, value.intValue);
+}
+
+
     unsigned int index = hash(name); // Calcul de l'index base sur le hash du nom
     SymbolEntry *newEntry = (SymbolEntry *)malloc(sizeof(SymbolEntry));
     newEntry->id = table->nextId++;       // Assignation d'un ID unique
@@ -263,9 +269,39 @@ for (int i = 0; i < HASH_TABLE_SIZE; i++) {
             snprintf(valueStr, sizeof(valueStr), "%.2f", current->value.floatValue);
         } else if (strcmp(current->type, "string") == 0) {
             snprintf(valueStr, sizeof(valueStr), "%s", current->value.stringValue);
-        } else {
-            snprintf(valueStr, sizeof(valueStr), "N/A");
+        } // In tableSymboles.c, modify the listAllSymbols function:
+        else if (strcmp(current->type, "array") == 0 && current->value.arrayValue != NULL) {
+    ArrayType* arr = current->value.arrayValue;
+    
+    int written = 0;
+    written += snprintf(valueStr, sizeof(valueStr), "[");
+
+    // Iterate through the array elements (use arr->length instead of arr->capacity)
+    for (int i = 0; i < arr->length && written < sizeof(valueStr); i++) {
+        if (i > 0) {
+            written += snprintf(valueStr + written, sizeof(valueStr) - written, ",");
         }
+
+        // Access the array element based on its type
+        switch (arr->elementType) {
+            case TYPE_INTEGER:
+                written += snprintf(valueStr + written, sizeof(valueStr) - written, 
+                    "%d", arr->data[i].intValue);  // Corrected access to arr->data[i]
+                break;
+            case TYPE_FLOAT:
+                written += snprintf(valueStr + written, sizeof(valueStr) - written, 
+                    "%.2f", arr->data[i].floatValue);
+                break;
+            case TYPE_STRING:
+                written += snprintf(valueStr + written, sizeof(valueStr) - written, 
+                    "%s", arr->data[i].stringValue);
+                break;
+            // Handle other types if needed
+        }
+    }
+    written += snprintf(valueStr + written, sizeof(valueStr) - written, "]");
+}
+
 
         printf("| %-*d | %-*s | %-*s | %-*d | %-*s |\n",
                idWidth, current->id,
