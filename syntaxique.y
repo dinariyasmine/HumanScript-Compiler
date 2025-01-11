@@ -44,6 +44,7 @@ void yyerror(const char *s);
     double floatValue;
     bool booleanValue;
     char stringValue[255];
+    struct SymbolEntry* entry;
     expression expression;
     variable variable;
 }
@@ -76,7 +77,7 @@ void yyerror(const char *s);
 /* Type definitions for non-terminals */
 %type <expression> Expression SimpleExpression ExpressionList
 %type <type> Type
-%type <symbole> Declaration Parameter ParameterList NonEmptyParameterList
+%type <entry> Declaration Parameter ParameterList NonEmptyParameterList
 %type <variable> Assignment
 
 /* Precedence rules */
@@ -101,8 +102,6 @@ SymbolTable *symbolTable;
 pile * stack;
 quad * q;
 int qc = 1;
-
-
 
 void yysuccess(char *s);
 void yyerror(const char *s);
@@ -307,6 +306,7 @@ Declaration:
 
     // Insert the symbol into the symbol table
     insertSymbol(symbolTable, $3, type_str, value, 0, false, true);
+    $$ = lookupSymbolByName(symbolTable, $3, 0);
     printf("Symbol inserted successfully\n");
 }
 
