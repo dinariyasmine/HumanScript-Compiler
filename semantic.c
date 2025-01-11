@@ -62,7 +62,8 @@ void getTypeString(int type, char* typeStr) {
     }
     typeStr[MAX_TYPE_LENGTH - 1] = '\0';
     printf("Type string result: %s\n", typeStr);
-}bool validateAndSetValue(SymbolValue* value, expression expr, int declaredType) {
+}
+bool validateAndSetValue(SymbolValue* value, expression expr, int declaredType) {
     if (expr.type != declaredType) {
         char expectedType[20], gotType[20];
         getTypeString(declaredType, expectedType);
@@ -72,6 +73,9 @@ void getTypeString(int type, char* typeStr) {
     }
 
     switch(declaredType) {
+        case TYPE_BOOLEAN:
+            value->intValue = expr.booleanValue ? 1 : 0;  // Store bool as int
+            break;
         case TYPE_INTEGER:
             value->intValue = expr.integerValue;
             break;
@@ -81,9 +85,6 @@ void getTypeString(int type, char* typeStr) {
         case TYPE_STRING:
             strncpy(value->stringValue, expr.stringValue, MAX_NAME_LENGTH - 1);
             value->stringValue[MAX_NAME_LENGTH - 1] = '\0';
-            break;
-        case TYPE_BOOLEAN:
-            value->intValue = expr.booleanValue ? 1 : 0;
             break;
         default:
             return false;

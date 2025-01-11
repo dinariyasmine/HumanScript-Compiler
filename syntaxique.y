@@ -181,22 +181,21 @@ Expression:
     SimpleExpression {
         $$ = $1;
     }
-    |Expression:
+  
     | Expression ADD Expression {
-        // Handle string concatenation
         if ($1.type == TYPE_STRING && $3.type == TYPE_STRING) {
             $$.type = TYPE_STRING;
-            char result[255];
-            snprintf(result, sizeof(result), "%s%s", $1.stringValue, $3.stringValue);
+            char* result = malloc(strlen($1.stringValue) + strlen($3.stringValue) + 1);
+            strcpy(result, $1.stringValue);
+            strcat(result, $3.stringValue);
             strncpy($$.stringValue, result, 254);
             $$.stringValue[254] = '\0';
+            free(result);
             
             char temp[20];
             sprintf(temp, "t%d", qc);
             insererQuadreplet(&q, "CONCAT", $1.stringValue, $3.stringValue, temp, qc++);
-        }
-        // Existing arithmetic addition code
-        else {
+        } else {
             $$.type = validateArithmeticOperation($1, $3);
             if ($$.type == TYPE_INTEGER) {
                 $$.integerValue = $1.integerValue + $3.integerValue;
@@ -269,6 +268,9 @@ Expression:
     | Expression EQUAL Expression {
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = compareExpressions($1, $3) == 0;
+        printf("EQUAL Operation: %d == %d = %d\n", 
+               $1.integerValue, $3.integerValue, $$.booleanValue);
+
         char temp[20];
         sprintf(temp, "t%d", qc);
         insererQuadreplet(&q, "==", getExpressionValue($1), getExpressionValue($3), temp, qc++);
@@ -308,21 +310,49 @@ Expression:
         sprintf(temp, "t%d", qc);
         insererQuadreplet(&q, "<=", getExpressionValue($1), getExpressionValue($3), temp, qc++);
     }
-    | Expression LOGICAL_AND Expression {
-        $$.type = TYPE_BOOLEAN;
-        $$.booleanValue = $1.booleanValue && $3.booleanValue;
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        insererQuadreplet(&q, "AND", getExpressionValue($1), getExpressionValue($3), temp, qc++);
+
+    | | Expression LOGICAL_AND Expression {
+    // First, ensure both operands are of TYPE_BOOLEAN
+    if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
+        yyerror("Logical AND operation requires boolean operands");
+        YYERROR;
     }
+    
+    // Perform the logical AND operation
+    $$.type = TYPE_BOOLEAN;
+    $$.booleanValue = $1.booleanValue && $3.booleanValue;
+    
+    // Generate quadruplet
+    char temp[20];
+    sprintf(temp, "t%d", qc);
+    insererQuadreplet(&q, "AND", 
+        $1.booleanValue ? "true" : "false",
+        $3.booleanValue ? "true" : "false", 
+        temp, 
+        qc++);
+}
+
     | Expression LOGICAL_OR Expression {
+        if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
+            yyerror("Logical OR operation requires boolean operands");
+            YYERROR;
+        }
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = $1.booleanValue || $3.booleanValue;
+        
+        // Debugging output
+        printf("OR Operation: %d || %d = %d\n", 
+               $1.booleanValue, $3.booleanValue, $$.booleanValue);
+        
         char temp[20];
         sprintf(temp, "t%d", qc);
         insererQuadreplet(&q, "OR", getExpressionValue($1), getExpressionValue($3), temp, qc++);
     }
     | LOGICAL_NOT Expression {
+        if ($2.type != TYPE_BOOLEAN) {
+            yyerror("Logical NOT operation requires boolean operand");
+            YYERROR;
+        }
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = !$2.booleanValue;
         char temp[20];
@@ -330,10 +360,14 @@ Expression:
         insererQuadreplet(&q, "NOT", getExpressionValue($2), "", temp, qc++);
     }
     | SUB Expression %prec UMINUS {
+        if ($2.type != TYPE_INTEGER && $2.type != TYPE_FLOAT) {
+            yyerror("Unary minus requires numeric operand");
+            YYERROR;
+        }
         $$.type = $2.type;
         if ($2.type == TYPE_INTEGER) {
             $$.integerValue = -$2.integerValue;
-        } else if ($2.type == TYPE_FLOAT) {
+        } else {
             $$.floatValue = -$2.floatValue;
         }
         char temp[20];
@@ -353,34 +387,37 @@ SimpleExpression:
         $$.type = TYPE_FLOAT;
         $$.floatValue = $1;  
     }
-SimpleExpression:
+
     | STRING_LITERAL {
         $$.type = TYPE_STRING;
         strncpy($$.stringValue, $1, 254);
         $$.stringValue[254] = '\0';
     }
+
     | ID {
-        SymbolEntry *symbol = lookupSymbolByName(symbolTable, $1, 0);
-        if (!symbol) {
-            yyerror("Undefined identifier");
-            YYERROR;
-        }
-        
-        if (strcmp(symbol->type, "string") == 0) {
-            $$.type = TYPE_STRING;
-            strncpy($$.stringValue, symbol->value.stringValue, 254);
-            $$.stringValue[254] = '\0';
-        } else if (strcmp(symbol->type, "int") == 0) {
-            $$.type = TYPE_INTEGER;
-            $$.integerValue = symbol->value.intValue;
-        } else if (strcmp(symbol->type, "float") == 0) {
-            $$.type = TYPE_FLOAT;
-            $$.floatValue = symbol->value.floatValue;
-        } else if (strcmp(symbol->type, "boolean") == 0) {
-            $$.type = TYPE_BOOLEAN;
-            $$.booleanValue = symbol->value.intValue != 0;
-        }
+    SymbolEntry *symbol = lookupSymbolByName(symbolTable, $1, 0);
+    if (!symbol) {
+        yyerror("Undefined identifier");
+        YYERROR;
     }
+    
+    if (strcmp(symbol->type, "bool") == 0) {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = symbol->value.intValue != 0;
+    } else if (strcmp(symbol->type, "int") == 0) {
+        $$.type = TYPE_INTEGER;
+        $$.integerValue = symbol->value.intValue;
+    } else if (strcmp(symbol->type, "float") == 0) {
+        $$.type = TYPE_FLOAT;
+        $$.floatValue = symbol->value.floatValue;
+    } else if (strcmp(symbol->type, "string") == 0) {
+        $$.type = TYPE_STRING;
+        strncpy($$.stringValue, symbol->value.stringValue, 254);
+        $$.stringValue[254] = '\0';
+    }
+}
+
+
 
     | TRUE {
         $$.type = TYPE_BOOLEAN;
