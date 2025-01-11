@@ -6,6 +6,7 @@
 #define simpleToArrayOffset 4
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <math.h>
 #define YYDEBUG 1
@@ -76,6 +77,10 @@ void yyerror(const char *s);
 
 /* Type definitions for non-terminals */
 %type <expression> Expression SimpleExpression ExpressionList
+%type <expression> ArrayLiteral
+%type <expression> DictLiteral
+%type <expression> DictItems
+%type <expression> DictItem
 %type <type> Type
 %type <entry> Declaration Parameter ParameterList NonEmptyParameterList
 %type <variable> Assignment
@@ -226,194 +231,114 @@ SimpleExpression:
 
 Declaration:
     | LET Type ID BE Expression {
-    printf("Declaration with initialization\n");
-    SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $3, 0);
-      if (existingSymbol != NULL) {  // If symbol exists
-          printf("Warning: Identifier '%s' already exists. Replacing old value.\n", $3);
-          
-          // Remove the old symbol
-          deleteSymbolByName(symbolTable, $3);
-      }
-    
-    // Create a new symbol value
-    SymbolValue value = {0};
-    char type_str[MAX_TYPE_LENGTH] = {0};
-    char valueStr[255] = {0};  // Buffer for string representation
-    bool type_match = true;
-
-    // Print the declared type and expression type
-    printf("Declared type: %d, Expression type: %d\n", $2, $5.type);
-    printf("Identifier name: %s\n", $3);
-
-    // Convert expression value to string for debug
-    valeurToString($5, valueStr);
-    printf("Expression value: %s\n", valueStr);
-
-    // Handle type matching and assignment
-    switch($2) {
-        case TYPE_INTEGER:
-            strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
-            if ($5.type == TYPE_INTEGER) {
-                value.intValue = $5.integerValue;
-                printf("Setting integer value: %d\n", value.intValue);
-            } else {
-                type_match = false;
+        printf("Declaration with initialization\n");
+        
+        // Check for existing symbol and handle redeclaration
+        SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $3, 0);
+        if (existingSymbol != NULL) {
+            if (existingSymbol->isConst) {
+                yyerror("Cannot redeclare constant");
+                YYERROR;
             }
-            break;
-
-        case TYPE_FLOAT:
-            strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
-            if ($5.type == TYPE_FLOAT) {
-                value.floatValue = $5.floatValue;
-                printf("Setting float value: %f\n", value.floatValue);
-            } else {
-                type_match = false;
-            }
-            break;
-
-        case TYPE_STRING:
-            strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
-            if ($5.type == TYPE_STRING) {
-                strncpy(value.stringValue, $5.stringValue, MAX_NAME_LENGTH - 1);
-                value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
-                printf("Setting string value: %s\n", value.stringValue);
-            } else {
-                type_match = false;
-            }
-            break;
-
-        case TYPE_BOOLEAN:
-            strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
-            if ($5.type == TYPE_BOOLEAN) {
-                value.intValue = $5.booleanValue ? 1 : 0;  // Assigning 1 for true and 0 for false
-                printf("Boolean value set to: %d\n", value.intValue);  // Check if value is correct
-            } else {
-                type_match = false;
-            }
-            break;
-
-
-        default:
-            printf("Unsupported type in declaration\n");
+            printf("Warning: Redeclaring '%s'. Previous value will be overwritten.\n", $3);
+            deleteSymbolByName(symbolTable, $3);
+        }
+        
+        // Initialize symbol value
+        SymbolValue value = {0};
+        if (!validateAndSetValue(&value, $5, $2)) {
             YYERROR;
+        }
+        
+        // Insert into symbol table
+        char typeStr[MAX_TYPE_LENGTH];
+        getTypeString($2, typeStr);
+        insertSymbol(symbolTable, $3, typeStr, value, 0, false, true);
+        
+        $$ = lookupSymbolByName(symbolTable, $3, 0);
+        printf("Symbol '%s' inserted successfully\n", $3);
     }
-
-    // Check for type mismatch
-    if (!type_match) {
-        printf("Type mismatch: Expected %s, got %s\n", type_str, valueStr);
-        YYERROR;
-    }
-
-    // Insert the symbol into the symbol table
-    insertSymbol(symbolTable, $3, type_str, value, 0, false, true);
-    $$ = lookupSymbolByName(symbolTable, $3, 0);
-    printf("Symbol inserted successfully\n");
-}
-
     | CONST Type ID BE Expression {
         printf("Constant declaration\n");
         
-        // Create a new symbol value
-        SymbolValue value = {0};
-        char type_str[MAX_TYPE_LENGTH] = {0};
-        bool type_match = true;
-
-        printf("Declared type: %d, Expression type: %d\n", $2, $5.type);
-        printf("Identifier name: %s\n", $3);  // $3 is now directly the identifier string
-
-        // Convert numeric type to string representation and check type match
-        switch($2) {
-            case TYPE_INTEGER:
-                strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_INTEGER) {
-                    value.intValue = $5.integerValue;
-                    printf("Setting integer value: %d\n", value.intValue);
-                } else {
-                    type_match = false;
-                }
-                break;
-            case TYPE_FLOAT:
-                strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_FLOAT) {
-                    value.floatValue = $5.floatValue;
-                } else {
-                    type_match = false;
-                }
-                break;
-            case TYPE_STRING:
-                strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_STRING) {
-                    strncpy(value.stringValue, $5.stringValue, MAX_NAME_LENGTH - 1);
-                    value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
-                } else {
-                    type_match = false;
-                }
-                break;
-            case TYPE_BOOLEAN:
-              strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
-              type_str[MAX_TYPE_LENGTH - 1] = '\0';
-              if ($5.type == TYPE_BOOLEAN) {
-                  value.intValue = $5.booleanValue ? 1 : 0;
-                  printf("Boolean value set to: %d\n", value.intValue);
-              } else {
-                  type_match = false;
-              }
-              break;
-
-            default:
-                printf("Unsupported type in constant declaration\n");
-                YYERROR;
-        }
-
-        if (!type_match) {
-            printf("Type mismatch: Expected type %s\n", type_str);
+        // Check for existing symbol
+        if (symbolExistsByName(symbolTable, $3, 0)) {
+            yyerror("Cannot redeclare identifier");
             YYERROR;
         }
-
-        // Insert the constant into the table
-        insertSymbol(symbolTable, $3, type_str, value, 0, true, true);
-        printf("Constant inserted successfully\n");
-    }
-    | Type ID { 
-        printf("Simple declaration without initialization\n");
-        printf("Declaring identifier: %s\n", $2);  // $2 
         
-        // Create a new symbol value with default initialization
+        // Initialize and validate constant value
         SymbolValue value = {0};
-        char type_str[MAX_TYPE_LENGTH] = {0};
-
-        // Convert numeric type to string representation
-        switch($1) {
-            case TYPE_INTEGER:
-                strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
-                break;
-            case TYPE_FLOAT:
-                strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
-                break;
-            case TYPE_STRING:
-                strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
-                break;
-            case TYPE_BOOLEAN:
-                strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
-                break;
-            default:
-                printf("Unsupported type in declaration\n");
-                YYERROR;
+        if (!validateAndSetValue(&value, $5, $2)) {
+            YYERROR;
         }
+        
+        // Insert constant into symbol table
+        char typeStr[MAX_TYPE_LENGTH];
+        getTypeString($2, typeStr);
+        insertSymbol(symbolTable, $3, typeStr, value, 0, true, true);
+        printf("Constant '%s' declared successfully\n", $3);
+    }
+    | Type ID {
+        printf("Simple declaration without initialization\n");
+        
+        // Check for existing symbol
+        if (symbolExistsByName(symbolTable, $2, 0)) {
+            yyerror("Cannot redeclare identifier");
+            YYERROR;
+        }
+        
+        // Initialize with default value
+        SymbolValue value = {0};
+        initDefaultValue(&value, $1);
+        
+        // Insert into symbol table
+        char typeStr[MAX_TYPE_LENGTH];
+        getTypeString($1, typeStr);
+        insertSymbol(symbolTable, $2, typeStr, value, 0, false, false);
+        printf("Symbol '%s' declared without initialization\n", $2);
+    }
+    | LET ARRAY Type ID BE ArrayLiteral {
+    printf("Array declaration with initialization\n");
 
-        // Insert the uninitialized symbol into the table
-        insertSymbol(symbolTable, $2, type_str, value, 0, false, false);
-        printf("Symbol inserted successfully\n");
+    // Check for existing symbol and handle redeclaration
+    SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $4, 0);
+    if (existingSymbol != NULL) {
+        yyerror("Cannot redeclare identifier");
+        YYERROR;
     }
 
-Type:
-    INT { $$ = TYPE_INTEGER; printf("Type entier\n"); }
-    | FLOAT { $$ = TYPE_FLOAT; printf("Type flottant\n"); }
-    | BOOL { $$ = TYPE_BOOLEAN; printf("Type booléen\n"); }
-    | STR { $$ = TYPE_STRING; printf("Type chaîne de caractères\n"); }
-    | ARRAY 
-    | DICT
+    // Handle array initialization based on the base type
+    ArrayType* arr = (ArrayType*)$6.integerValue; // This is not correct - we need to use the base type here
+    if (!arr) {
+        yyerror("Invalid array initialization");
+        YYERROR;
+    }
+
+    // Insert array into the symbol table
+    SymbolValue value = {0};
+    value.arrayValue = arr;
+    char typeStr[MAX_TYPE_LENGTH];
+    getTypeString(TYPE_ARRAY, typeStr);
+    insertSymbol(symbolTable, $4, typeStr, value, 0, false, true);
+    printf("Array '%s' declared successfully\n", $4);
+}
+
     ;
+
+/* Type definitions including array and dict */
+Type:
+    INT     { $$ = TYPE_INTEGER; }
+    | FLOAT { $$ = TYPE_FLOAT; }
+    | BOOL  { $$ = TYPE_BOOLEAN; }
+    | STR   { $$ = TYPE_STRING; }
+    | ARRAY Type {
+        $$ = TYPE_ARRAY;
+        printf("Array type of %d parsed\n", $2); // Base type of the array
+    }
+    | DICT Type Type { $$ = TYPE_DICT; }
+;
+
 
 
 /* Affectation simple */
@@ -513,8 +438,34 @@ DefaultPart:
 
 /* Définition des littéraux tableau */
 ArrayLiteral:
-    LBRACKET RBRACKET
-    | LBRACKET ExpressionList RBRACKET
+    LBRACKET RBRACKET {
+        // Empty array, default initialization
+        $$.type = TYPE_ARRAY;
+        ArrayType* arr = createArray(TYPE_INTEGER); // Default to int or based on $2
+        $$.integerValue = (intptr_t)arr;
+    }
+    | LBRACKET ExpressionList RBRACKET {
+        // Array with elements
+        $$.type = TYPE_ARRAY;
+        ArrayType* arr = createArrayFromExprList($2); // Create array from expressions
+        $$.integerValue = (intptr_t)arr;
+    }
+;
+
+
+DictLiteral:
+    LBRACE RBRACE {
+        // Empty dictionary
+        $$.type = TYPE_DICT;
+        DictType* dict = createDict($<type>0, $<type>1);  // Get key and value types from context
+        $$.integerValue = (intptr_t)dict;
+    }
+    | LBRACE DictItems RBRACE {
+        // Dictionary with items
+        $$.type = TYPE_DICT;
+        DictType* dict = createDictFromItems($2);
+        $$.integerValue = (intptr_t)dict;
+    }
     ;
 
 /* Liste d'expressions pour les tableaux */
@@ -523,11 +474,6 @@ ExpressionList:
     | ExpressionList COMMA Expression
     ;
 
-/* Définition des littéraux dictionnaire */
-DictLiteral:
-    LBRACE RBRACE
-    | LBRACE DictItems RBRACE
-    ;
 
 DictItems:
     DictItem

@@ -1,9 +1,13 @@
 /*************************************** Fichier d'En-Tete pour la Table des Symboles *************************/
+#ifndef TABLE_SYMBOLES_H
+#define TABLE_SYMBOLES_H
 #include <stddef.h> 
 #include <stdlib.h> 
 #include <string.h> 
 #include <stdio.h> 
 #include <stdbool.h>  // Include for bool type
+
+
 
 #define TYPE_BOOLEAN 0
 #define TYPE_INTEGER 1
@@ -22,12 +26,18 @@
 // Definitions de constantes
 #define HASH_TABLE_SIZE 101 // Taille de la table de hachage (un nombre premier pour une meilleure distribution des hachages)
 
+typedef struct {
+    int length;     // Number of elements in the array
+    void* elements; // Pointer to the array data (could be any type)
+} ArrayType1;
 // Union pour stocker la valeur du symbole
 typedef union {
     int intValue;
     float floatValue;
+    ArrayType1* arrayValue;
     char stringValue[MAX_NAME_LENGTH]; // Fixed-size array for string values
 } SymbolValue;
+
 
 // Structure representant une entree de symbole dans la table des symboles
 typedef struct SymbolEntry {
@@ -61,3 +71,4 @@ void listAllSymbols(SymbolTable *table);
 void updateSymbolValue(SymbolTable *table, int id, SymbolValue newValue, int scopeLevel);
 void freeSymbolEntry(SymbolEntry *entry);
 void resizeSymbolTable(SymbolTable *table, int newSize);
+#endif // TABLE_SYMBOLES_H
