@@ -1,1 +1,2 @@
 const bool x be false
+const bool x be true

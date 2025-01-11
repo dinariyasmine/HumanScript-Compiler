@@ -250,32 +250,32 @@ void listAllSymbols(SymbolTable *table) {
            valueWidth, "---------");
 
     // Print entries
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        SymbolEntry *current = table->buckets[i];
-        while (current) {
-            char valueStr[64]; // Buffer to store the value as a string
-            if (strcmp(current->type, "int") == 0) {
-                snprintf(valueStr, sizeof(valueStr), "%d", current->value.intValue);
-            } else if (strcmp(current->type, "bool") == 0) {
-                printf("%s", current->value.intValue ? "true" : "false");
-            }
-             else if (strcmp(current->type, "float") == 0) {
-                snprintf(valueStr, sizeof(valueStr), "%.2f", current->value.floatValue);
-            } else if (strcmp(current->type, "string") == 0) {
-                snprintf(valueStr, sizeof(valueStr), "%s", current->value.stringValue);
-            } else {
-                snprintf(valueStr, sizeof(valueStr), "N/A");
-            }
-
-            printf("| %-*d | %-*s | %-*s | %-*d | %-*s |\n",
-                   idWidth, current->id,
-                   nameWidth, current->name,
-                   typeWidth, current->type,
-                   scopeWidth, current->scopeLevel,
-                   valueWidth, valueStr);
-            current = current->next;
+for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+    SymbolEntry *current = table->buckets[i];
+    while (current) {
+        char valueStr[64]; // Buffer to store the value as a string
+        if (strcmp(current->type, "int") == 0) {
+            snprintf(valueStr, sizeof(valueStr), "%d", current->value.intValue);
+        } else if (strcmp(current->type, "bool") == 0) {
+            // Print boolean as true/false
+            snprintf(valueStr, sizeof(valueStr), "%s", current->value.intValue ? "true" : "false");
+        } else if (strcmp(current->type, "float") == 0) {
+            snprintf(valueStr, sizeof(valueStr), "%.2f", current->value.floatValue);
+        } else if (strcmp(current->type, "string") == 0) {
+            snprintf(valueStr, sizeof(valueStr), "%s", current->value.stringValue);
+        } else {
+            snprintf(valueStr, sizeof(valueStr), "N/A");
         }
+
+        printf("| %-*d | %-*s | %-*s | %-*d | %-*s |\n",
+               idWidth, current->id,
+               nameWidth, current->name,
+               typeWidth, current->type,
+               scopeWidth, current->scopeLevel,
+               valueWidth, valueStr);
+        current = current->next;
     }
+}
 
     printf("+-%*s-+-%*s-+-%*s-+-%*s-+-%*s-+\n",
            idWidth, "---------",

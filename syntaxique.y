@@ -226,67 +226,83 @@ SimpleExpression:
     ;
 
 Declaration:
-    LET Type ID BE Expression  { 
-        printf("Declaration with initialization\n");
-        
-        // Create a new symbol value
-        SymbolValue value = {0};
-        char type_str[MAX_TYPE_LENGTH] = {0};
-        bool type_match = true;
+    | LET Type ID BE Expression {
+    printf("Declaration with initialization\n");
+    
+    // Create a new symbol value
+    SymbolValue value = {0};
+    char type_str[MAX_TYPE_LENGTH] = {0};
+    char valueStr[255] = {0};  // Buffer for string representation
+    bool type_match = true;
 
-        printf("Declared type: %d, Expression type: %d\n", $2, $5.type);
-        printf("Identifier name: %s\n", $3);  // $3 is now directly the identifier string
+    // Print the declared type and expression type
+    printf("Declared type: %d, Expression type: %d\n", $2, $5.type);
+    printf("Identifier name: %s\n", $3);
 
-        // Convert numeric type to string representation and check type match
-        switch($2) {
-            case TYPE_INTEGER:
-                strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_INTEGER) {
-                    value.intValue = $5.integerValue;
-                    printf("Setting integer value: %d\n", value);
-                } else {
-                    type_match = false;
-                }
-                break;
-            case TYPE_FLOAT:
-                strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_FLOAT) {
-                    value.floatValue = $5.floatValue;
-                    printf("Setting float value in declaration: %f\n", value.floatValue);
-                }
-                break;
+    // Convert expression value to string for debug
+    valeurToString($5, valueStr);
+    printf("Expression value: %s\n", valueStr);
 
-            case TYPE_STRING:
-                strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_STRING) {
-                    strncpy(value.stringValue, $5.stringValue, MAX_NAME_LENGTH - 1);
-                    value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
-                } else {
-                    type_match = false;
-                }
-                break;
-            case TYPE_BOOLEAN:
-                strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
-                if ($5.type == TYPE_BOOLEAN) {
-                    value.intValue = $5.booleanValue ? 1 : 0;
-                } else {
-                    type_match = false;
-                }
-                break;
-            default:
-                printf("Unsupported type in declaration\n");
-                YYERROR;
-        }
+    // Handle type matching and assignment
+    switch($2) {
+        case TYPE_INTEGER:
+            strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
+            if ($5.type == TYPE_INTEGER) {
+                value.intValue = $5.integerValue;
+                printf("Setting integer value: %d\n", value.intValue);
+            } else {
+                type_match = false;
+            }
+            break;
 
-        if (!type_match) {
-            printf("Type mismatch: Expected type %s\n", type_str);
+        case TYPE_FLOAT:
+            strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
+            if ($5.type == TYPE_FLOAT) {
+                value.floatValue = $5.floatValue;
+                printf("Setting float value: %f\n", value.floatValue);
+            } else {
+                type_match = false;
+            }
+            break;
+
+        case TYPE_STRING:
+            strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
+            if ($5.type == TYPE_STRING) {
+                strncpy(value.stringValue, $5.stringValue, MAX_NAME_LENGTH - 1);
+                value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
+                printf("Setting string value: %s\n", value.stringValue);
+            } else {
+                type_match = false;
+            }
+            break;
+
+        case TYPE_BOOLEAN:
+            strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
+            if ($5.type == TYPE_BOOLEAN) {
+                value.intValue = $5.booleanValue ? 1 : 0;  // Assigning 1 for true and 0 for false
+                printf("Boolean value set to: %d\n", value.intValue);  // Check if value is correct
+            } else {
+                type_match = false;
+            }
+            break;
+
+
+        default:
+            printf("Unsupported type in declaration\n");
             YYERROR;
-        }
-
-        // Insert the symbol into the table
-        insertSymbol(symbolTable, $3, type_str, value, 0, false, true);
-        printf("Symbol inserted successfully\n");
     }
+
+    // Check for type mismatch
+    if (!type_match) {
+        printf("Type mismatch: Expected %s, got %s\n", type_str, valueStr);
+        YYERROR;
+    }
+
+    // Insert the symbol into the symbol table
+    insertSymbol(symbolTable, $3, type_str, value, 0, false, true);
+    printf("Symbol inserted successfully\n");
+}
+
     | CONST Type ID BE Expression {
         printf("Constant declaration\n");
         
