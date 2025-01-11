@@ -228,6 +228,13 @@ SimpleExpression:
 Declaration:
     | LET Type ID BE Expression {
     printf("Declaration with initialization\n");
+    SymbolEntry *existingSymbol = symbolExistsByName(symbolTable, $3, 0);
+      if (existingSymbol != NULL) {  // If symbol exists
+          printf("Warning: Identifier '%s' already exists. Replacing old value.\n", $3);
+          
+          // Remove the old symbol
+          deleteSymbolByName(symbolTable, $3);
+      }
     
     // Create a new symbol value
     SymbolValue value = {0};
@@ -369,7 +376,7 @@ Declaration:
     }
     | Type ID { 
         printf("Simple declaration without initialization\n");
-        printf("Declaring identifier: %s\n", $2);  // $2 now refers to the identifier string
+        printf("Declaring identifier: %s\n", $2);  // $2 
         
         // Create a new symbol value with default initialization
         SymbolValue value = {0};
