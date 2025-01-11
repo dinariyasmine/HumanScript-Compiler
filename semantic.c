@@ -19,7 +19,12 @@ void valeurToString(expression expression, char * valeur){
         case TYPE_BOOLEAN:
             sprintf(valeur, "%s", expression.booleanValue ? "true" : "false");
             break;
+        case TYPE_CONST:
+            sprintf(valeur, "const");
+            break;
+        
         default:
+            sprintf(valeur, "Unknown type");
             break;
     }
 }

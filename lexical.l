@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "syntaxique.tab.h"
+
 extern void yyerror(const char *s);
 extern int positionCurseur;
 #define avancerCurseur() positionCurseur += yyleng
@@ -83,15 +84,17 @@ void erreurLexical() {
  
 [0-9]+ { 
     avancerCurseur();
-    printf("Nombre entier: %s\n", yytext); 
+    yylval.integerValue = atoi(yytext);
+    printf("Lexer recognized integer: %d\n", yylval.integerValue);
     return INT_LITERAL; 
 } 
  
 [0-9]+\.[0-9]+ { 
     avancerCurseur();
-    printf("Nombre réel: %s\n", yytext); 
+    yylval.floatValue = atof(yytext);  // Convert string to float
+    printf("Nombre réel: %f\n", yylval.floatValue); 
     return FLOAT_LITERAL; 
-} 
+}
  
 \"([^\"\\]|\\.)*\" { 
     avancerCurseur();
@@ -117,11 +120,14 @@ void erreurLexical() {
 
 
 
+
 [a-zA-Z_][a-zA-Z0-9_]* {
-    avancerCurseur(); 
-    printf("Identifiant: %s\n", yytext); 
-    return ID; 
-} 
+    positionCurseur += yyleng;
+    strncpy(yylval.identifier, yytext, 254);
+    yylval.identifier[254] = '\0';
+    printf("Identifier found: %s\n", yylval.identifier);
+    return ID;
+}
 
 . {
     positionCurseur += yyleng; 

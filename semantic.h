@@ -7,6 +7,7 @@ struct expression{
     int integerValue;
     double floatValue;
     bool booleanValue;
+    
 };
 
 typedef struct variable variable;

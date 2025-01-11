@@ -1,6 +1,8 @@
 %define parse.error verbose
 
 %{
+
+
 #define simpleToArrayOffset 4
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,17 +32,18 @@ void yyerror(const char *s);
 #include "tableSymboles.h"
 #include "quadruplets.h"
 #include "pile.h"
+
+
 }
 
 
 %union {
-    char identifier[255];
+    char identifier[255];      
     int type;
     int integerValue;
     double floatValue;
     bool booleanValue;
     char stringValue[255];
-    SymbolEntry *symbole;
     expression expression;
     variable variable;
 }
@@ -66,7 +69,8 @@ void yyerror(const char *s);
 %token <integerValue> INT_LITERAL 
 %token <floatValue> FLOAT_LITERAL 
 %token <stringValue> STRING_LITERAL
-%token <identifier> ID 
+%token <identifier> ID    
+
 %token COMMENT
 
 /* Type definitions for non-terminals */
@@ -93,9 +97,7 @@ extern int yyleng;
 extern int yylex();
 
 int currentColumn = 1;
-
-SymbolTable *myTable;
-
+SymbolTable *symbolTable;
 pile * stack;
 quad * q;
 int qc = 1;
@@ -190,34 +192,215 @@ Expression:
 
 /* Expressions simples : valeurs, identificateurs, tableaux... */
 SimpleExpression:
-    INT_LITERAL
-    | FLOAT_LITERAL
-    | STRING_LITERAL
-    | ID
-    | TRUE
-    | FALSE
+    INT_LITERAL {
+        $$.type = TYPE_INTEGER;
+        $$.integerValue = $1;
+    }
+    | FLOAT_LITERAL {
+        $$.type = TYPE_FLOAT;
+        $$.floatValue = $1;  
+    }
+    | STRING_LITERAL {
+        $$.type = TYPE_STRING;
+        strncpy($$.stringValue, $1, 254);
+        $$.stringValue[254] = '\0';
+    }
+    | ID {
+        $$.type = TYPE_STRING;
+        strncpy($$.stringValue, $1, 254);  // Now $1 is directly the string
+        $$.stringValue[254] = '\0';
+        // Note: You might want to look up the actual type from symbol table here
+    }
+    | TRUE {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = true;
+    }
+    | FALSE {
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = false;
+    }
     | ArrayLiteral
     | DictLiteral
-    | LPAREN Expression RPAREN
+    | LPAREN Expression RPAREN { $$ = $2; }
     | FunctionCall
     ;
 
-/* Déclarations de variables et constantes */
 Declaration:
-    LET Type ID BE Expression  { printf("Déclaration avec initialisation correcte\n"); }
-    | CONST Type ID BE Expression { printf("Déclaration de constante correcte\n"); }
-    | Type ID { printf("Déclaration correcte syntaxiquement\n"); }
-    ;
+    LET Type ID BE Expression  { 
+        printf("Declaration with initialization\n");
+        
+        // Create a new symbol value
+        SymbolValue value = {0};
+        char type_str[MAX_TYPE_LENGTH] = {0};
+        bool type_match = true;
 
+        printf("Declared type: %d, Expression type: %d\n", $2, $5.type);
+        printf("Identifier name: %s\n", $3);  // $3 is now directly the identifier string
+
+        // Convert numeric type to string representation and check type match
+        switch($2) {
+            case TYPE_INTEGER:
+                strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_INTEGER) {
+                    value.intValue = $5.integerValue;
+                    printf("Setting integer value: %d\n", value);
+                } else {
+                    type_match = false;
+                }
+                break;
+            case TYPE_FLOAT:
+                strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_FLOAT) {
+                    value.floatValue = $5.floatValue;
+                    printf("Setting float value in declaration: %f\n", value.floatValue);
+                }
+                break;
+
+            case TYPE_STRING:
+                strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_STRING) {
+                    strncpy(value.stringValue, $5.stringValue, MAX_NAME_LENGTH - 1);
+                    value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
+                } else {
+                    type_match = false;
+                }
+                break;
+            case TYPE_BOOLEAN:
+                strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_BOOLEAN) {
+                    value.intValue = $5.booleanValue ? 1 : 0;
+                } else {
+                    type_match = false;
+                }
+                break;
+            default:
+                printf("Unsupported type in declaration\n");
+                YYERROR;
+        }
+
+        if (!type_match) {
+            printf("Type mismatch: Expected type %s\n", type_str);
+            YYERROR;
+        }
+
+        // Insert the symbol into the table
+        insertSymbol(symbolTable, $3, type_str, value, 0, false, true);
+        printf("Symbol inserted successfully\n");
+    }
+    | CONST Type ID BE Expression {
+        printf("Constant declaration\n");
+        
+        // Create a new symbol value
+        SymbolValue value = {0};
+        char type_str[MAX_TYPE_LENGTH] = {0};
+        bool type_match = true;
+
+        printf("Declared type: %d, Expression type: %d\n", $2, $5.type);
+        printf("Identifier name: %s\n", $3);  // $3 is now directly the identifier string
+
+        // Convert numeric type to string representation and check type match
+        switch($2) {
+            case TYPE_INTEGER:
+                strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_INTEGER) {
+                    value.intValue = $5.integerValue;
+                    printf("Setting integer value: %d\n", value.intValue);
+                } else {
+                    type_match = false;
+                }
+                break;
+            case TYPE_FLOAT:
+                strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_FLOAT) {
+                    value.floatValue = $5.floatValue;
+                } else {
+                    type_match = false;
+                }
+                break;
+            case TYPE_STRING:
+                strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
+                if ($5.type == TYPE_STRING) {
+                    strncpy(value.stringValue, $5.stringValue, MAX_NAME_LENGTH - 1);
+                    value.stringValue[MAX_NAME_LENGTH - 1] = '\0';
+                } else {
+                    type_match = false;
+                }
+                break;
+            case TYPE_BOOLEAN:
+              strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
+              type_str[MAX_TYPE_LENGTH - 1] = '\0';
+              if ($5.type == TYPE_BOOLEAN) {
+                  value.intValue = $5.booleanValue ? 1 : 0;
+                  printf("Boolean value set to: %d\n", value.intValue);
+              } else {
+                  type_match = false;
+              }
+              break;
+
+            default:
+                printf("Unsupported type in constant declaration\n");
+                YYERROR;
+        }
+
+        if (!type_match) {
+            printf("Type mismatch: Expected type %s\n", type_str);
+            YYERROR;
+        }
+
+        // Insert the constant into the table
+        insertSymbol(symbolTable, $3, type_str, value, 0, true, true);
+        printf("Constant inserted successfully\n");
+    }
+    | Type ID { 
+        printf("Simple declaration without initialization\n");
+        printf("Declaring identifier: %s\n", $2);  // $2 now refers to the identifier string
+        
+        // Create a new symbol value with default initialization
+        SymbolValue value = {0};
+        char type_str[MAX_TYPE_LENGTH] = {0};
+
+        // Convert numeric type to string representation
+        switch($1) {
+            case TYPE_INTEGER:
+                strncpy(type_str, "int", MAX_TYPE_LENGTH - 1);
+                break;
+            case TYPE_FLOAT:
+                strncpy(type_str, "float", MAX_TYPE_LENGTH - 1);
+                break;
+            case TYPE_STRING:
+                strncpy(type_str, "string", MAX_TYPE_LENGTH - 1);
+                break;
+            case TYPE_BOOLEAN:
+                strncpy(type_str, "bool", MAX_TYPE_LENGTH - 1);
+                break;
+            default:
+                printf("Unsupported type in declaration\n");
+                YYERROR;
+        }
+
+        // Insert the uninitialized symbol into the table
+        insertSymbol(symbolTable, $2, type_str, value, 0, false, false);
+        printf("Symbol inserted successfully\n");
+    }
 
 Type:
-    INT | FLOAT | BOOL | STR | ARRAY | DICT
+    INT { $$ = TYPE_INTEGER; printf("Type entier\n"); }
+    | FLOAT { $$ = TYPE_FLOAT; printf("Type flottant\n"); }
+    | BOOL { $$ = TYPE_BOOLEAN; printf("Type booléen\n"); }
+    | STR { $$ = TYPE_STRING; printf("Type chaîne de caractères\n"); }
+    | ARRAY 
+    | DICT
     ;
 
+
+/* Affectation simple */
 /* Affectation simple */
 Assignment:
-    ID EQUAL Expression
+    ID EQUAL Expression 
     ;
+
+
+
 
 /* Instruction d'affichage */
 PrintStatement:
@@ -345,12 +528,19 @@ void yyerror(const char *s) {
     }
 }
 
-/* Programme principal */
 int main(void) {
     /* Ouverture du fichier d'entrée */
     yyin = fopen("input.txt", "r");
     if (!yyin) {
         fprintf(stderr, "Error: Could not open input file\n");
+        return 1;
+    }
+
+    // Initialize the symbol table before calling yyparse()
+    symbolTable = createSymbolTable();
+    if (!symbolTable) {
+        fprintf(stderr, "Error: Failed to create symbol table.\n");
+        fclose(yyin);
         return 1;
     }
 
@@ -362,17 +552,12 @@ int main(void) {
     } else {
         printf("Erreur lors de l'analyse syntaxique.\n");
     }
-    stack = (pile *)malloc(sizeof(pile));
-    yyparse();  
-    myTable = createSymbolTable();
 
-    listAllSymbols(myTable);  
+    // Free the symbol table after parsing is complete
+    listAllSymbols(symbolTable);  
+    freeSymbolTable(symbolTable);
 
-    
-    afficherQuad(q);
-    
-    
-
+    // Close the input file
     fclose(yyin);
     printf("Fichier d'entrée fermé.\n");
 
