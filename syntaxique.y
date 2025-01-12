@@ -191,14 +191,8 @@ WhileStart:
         char whileEndLabel[20];
         sprintf(whileConditionLabel, "WHILE_COND_%d", whileId);
         sprintf(whileEndLabel, "WHILE_END_%d", whileId);
-        
-        // Place the condition label
         insererQuadreplet(&q, whileConditionLabel, "", "", "", qc++);
-        
-        // Generate conditional jump to end if condition is false
-        insererQuadreplet(&q, "BZ", $2.value, "", whileEndLabel, qc++);
-        
-        // Push the while ID onto stack for matching endwhile
+        insererQuadreplet(&q, "BZ",whileEndLabel , "",   $2.value, qc++);
         empiler(stack, whileId);
     }
     ;
@@ -212,9 +206,34 @@ WhileCondition:
 
 
 
-RepeatLoop:
-    REPEAT COLON StatementList UNTIL Expression ENDREPEAT
-    ;
+RepeatLoop: RepeatStart StatementList RepeatEnd
+;
+
+RepeatStart: REPEAT COLON {
+    int repeatId = qc;
+    char repeatStartLabel[20];
+    sprintf(repeatStartLabel, "REPEAT_START_%d", repeatId);
+    insererQuadreplet(&q, repeatStartLabel, "", "", "", qc++);
+    empiler(stack, repeatId);
+}
+RepeatEnd : UNTIL Expression ENDREPEAT
+{
+int repeatId = depiler(stack);
+    char repeatStartLabel[20];
+    char repeatEndLabel[20];
+    sprintf(repeatStartLabel, "REPEAT_START_%d", repeatId);
+    sprintf(repeatEndLabel, "REPEAT_END_%d", repeatId);
+    char typeStr[MAX_TYPE_LENGTH];
+        getTypeString($2.type, typeStr);
+
+    if (!strcmp(typeStr,"boolean")) {
+        yyerror("Repeat-until condition must be a boolean expression");
+        YYERROR;
+    }
+    insererQuadreplet(&q, "BZ", repeatStartLabel, "",  $2.value, qc++);
+    insererQuadreplet(&q, repeatEndLabel, "", "", "", qc++);
+} 
+;
 
 
 Expression:
