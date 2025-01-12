@@ -7,53 +7,7 @@
 #define YYERROR return
 
 
-
-bool validateAndSetValue(char* value, expression expr, int declaredType) {
-    if (expr.type != declaredType) {
-        char expectedType[20], gotType[20];
-        getTypeString(declaredType, expectedType);
-        getTypeString(expr.type, gotType);
-        handleTypeError(expectedType, gotType);
-        return false;
-    }
-    
-    strncpy(value, expr.value, MAX_NAME_LENGTH - 1);
-    value[MAX_NAME_LENGTH - 1] = '\0';
-    return true;
-}
-
-void initDefaultValue(char* value, int type) {
-    switch(type) {
-        case TYPE_INTEGER:
-            strncpy(value, "0", MAX_NAME_LENGTH - 1);
-            break;
-        case TYPE_FLOAT:
-            strncpy(value, "0.0", MAX_NAME_LENGTH - 1);
-            break;
-        case TYPE_STRING:
-            strncpy(value, "", MAX_NAME_LENGTH - 1);
-            break;
-        case TYPE_BOOLEAN:
-            strncpy(value, "false", MAX_NAME_LENGTH - 1);
-            break;
-        case TYPE_ARRAY:
-            strncpy(value, "[]", MAX_NAME_LENGTH - 1);
-            break;
-        case TYPE_DICT:
-            strncpy(value, "{}", MAX_NAME_LENGTH - 1);
-            break;
-        default:
-            value[0] = '\0';
-    }
-    value[MAX_NAME_LENGTH - 1] = '\0';
-}
-
-void handleTypeError(const char* expectedType, const char* gotType) {
-    char errorMsg[256];
-    snprintf(errorMsg, sizeof(errorMsg), "Type mismatch: Expected %s, got %s", expectedType, gotType);
-    yyerror(errorMsg);
-}
-
+// fonctions de gestion de liste
 ArrayType* createArray(int elementType) {
     ArrayType* arr = malloc(sizeof(ArrayType));
     if (!arr) return NULL;
@@ -136,43 +90,9 @@ ExpressionList* addExpressionToList(ExpressionList* list, expression expr) {
     return list;
 }
 
-int validateArithmeticOperation(expression exp1, expression exp2) {
-    if (exp1.type != exp2.type) {
-        char type1[20], type2[20];
-        getTypeString(exp1.type, type1);
-        getTypeString(exp2.type, type2);
-        handleTypeError(type1, type2);
-        return -1;
-    }
-    return exp1.type;
-}
-
-char* getExpressionValue(expression exp) {
-    return exp.value;
-}
-
-int compareExpressions(expression exp1, expression exp2) {
-    if (exp1.type != exp2.type) {
-        yyerror("Cannot compare expressions of different types");
-        return 0;
-    }
-    return strcmp(exp1.value, exp2.value);
-}
 
 
-
-bool isNumericType(const char* type) {
-    return (strcmp(type, "int") == 0 || strcmp(type, "float") == 0);
-}
-
-bool isBooleanType(const char* type) {
-    return strcmp(type, "boolean") == 0;
-}
-
-bool isComparable(const char* type1, const char* type2) {
-    if (strcmp(type1, type2) != 0) return false;
-    return isNumericType(type1) || strcmp(type1, "string") == 0;
-}
+// conversion vers chaine de caractères de la valeur et type pour stockage dans table des symboles
 
 void getTypeString(int type, char *typeStr) {
     switch(type) {

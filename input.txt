@@ -1,6 +1,4 @@
-Let int x be 7
-int p
-const float m be 3.14
-const bool n be true
-Let int y be 3
-Let int z be x + y
+Let int x be 6
+While x < 10:
+    x == x + 1
+EndWhile

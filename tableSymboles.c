@@ -245,6 +245,5 @@ int symbolExistsById(SymbolTable *table, int id, int scopeLevel) {
 }
 
 void resizeSymbolTable(SymbolTable *table, int newSize) {
-    // Size is fixed, so this is a no-op
     (void)newSize;
 }

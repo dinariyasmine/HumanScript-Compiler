@@ -1,4 +1,3 @@
-/** Fichier d'En-Tete pour la Table des Symboles **/
 #ifndef TABLE_SYMBOLES_H
 #define TABLE_SYMBOLES_H
 #include <stddef.h> 
@@ -12,18 +11,10 @@
 #define TYPE_FLOAT 2
 #define TYPE_STRING 3
 #define TYPE_ARRAY 4
-#define TYPE_DICT 6
-#define TYPE_FUNCTION 7
-#define TYPE_CONST 8
-
-#define ROWS 128
-#define COLS 32
-#define MAX_NAME_LENGTH 64  // Maximum length for the name field
+#define MAX_NAME_LENGTH 64  
 #define MAX_TYPE_LENGTH 32
-#define MAX_VALUE_LENGTH 100  // Maximum length for the type field
-
-// Definitions de constantes
-#define HASH_TABLE_SIZE 101 // Taille de la table de hachage (un nombre premier pour une meilleure distribution des hachages)
+#define MAX_VALUE_LENGTH 100  
+#define HASH_TABLE_SIZE 101 
 
 typedef struct ArrayType ArrayType;
 
@@ -34,7 +25,7 @@ typedef struct ArrayType {
     char** data;
 } ArrayType;
 
-// Structure representant une entree de symbole dans la table des symboles
+
 typedef struct SymbolEntry {
     int id;
     char name[MAX_NAME_LENGTH];
@@ -66,4 +57,4 @@ void listAllSymbols(SymbolTable *table);
 void updateSymbolValue(SymbolTable *table, int id,const char *newValue, int scopeLevel);
 void freeSymbolEntry(SymbolEntry *entry);
 void resizeSymbolTable(SymbolTable *table, int newSize);
-#endif // TABLE_SYMBOLES_H
+#endif 

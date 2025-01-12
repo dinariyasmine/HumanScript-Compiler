@@ -1,24 +1,18 @@
 %define parse.error verbose
 
 %{
-
-
-#define simpleToArrayOffset 4
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
 #define YYDEBUG 1
-
-
 extern int yylex();
 extern int yylineno; 
 extern char* yytext;
 extern FILE* yyin;
 int positionCurseur = 0;
 char *file = "input.txt";
-
 void yyerror(const char *s);  
 %}
 
@@ -47,8 +41,8 @@ void yyerror(const char *s);
     char stringValue[255];
     struct SymbolEntry* entry;
     expression expression;
-    variable variable;
     ExpressionList* exprList;
+    variable variable;
 }
 
 %token <type> INT FLOAT BOOL STR 
@@ -103,13 +97,11 @@ extern FILE *yyin;
 extern int yylineno;
 extern int yyleng;
 extern int yylex();
-
 int currentColumn = 1;
 SymbolTable *symbolTable;
 pile * stack;
-quad *q = NULL;  
-int qc = 1;
-
+quad *q = NULL;  // quadruplet
+int qc = 1; // pile
 int currentArrayType = -1;
 void yysuccess(char *s);
 void yyerror(const char *s);
@@ -123,8 +115,8 @@ Program:
 
 
 StatementList:
-    /* empty */                    { }
-    | StatementList Statement      { }
+    /* empty */                    
+    | StatementList Statement      
     ;
 
 
@@ -167,8 +159,59 @@ ForLoop:
 
 
 WhileLoop:
-    WHILE Expression COLON StatementList ENDWHILE
+    WhileStart StatementList ENDWHILE {
+        // Get the start label from stack
+        int whileId = depiler(stack);
+        
+        // Generate labels
+        char whileConditionLabel[20];
+        char whileEndLabel[20];
+        sprintf(whileConditionLabel, "WHILE_COND_%d", whileId);
+        sprintf(whileEndLabel, "WHILE_END_%d", whileId);
+        
+        // Generate unconditional jump back to condition
+        insererQuadreplet(&q, "BR", "", "", whileConditionLabel, qc++);
+        
+        // Place end label for the while loop
+        insererQuadreplet(&q, whileEndLabel, "", "", "", qc++);
+    }
     ;
+
+WhileStart:
+    WhileCondition Expression COLON {
+        // Validate expression type
+        if ($2.type != TYPE_BOOLEAN) {
+            yyerror("While condition must be a boolean expression");
+            YYERROR;
+        }
+        
+        // Generate unique ID for this while loop
+        int whileId = qc;
+        
+        // Generate label names
+        char whileConditionLabel[20];
+        char whileEndLabel[20];
+        sprintf(whileConditionLabel, "WHILE_COND_%d", whileId);
+        sprintf(whileEndLabel, "WHILE_END_%d", whileId);
+        
+        // Place the condition label
+        insererQuadreplet(&q, whileConditionLabel, "", "", "", qc++);
+        
+        // Generate conditional jump to end if condition is false
+        insererQuadreplet(&q, "BZ", $2.value, "", whileEndLabel, qc++);
+        
+        // Push the while ID onto stack for matching endwhile
+        empiler(stack, whileId);
+    }
+    ;
+
+WhileCondition:
+    WHILE
+    ;
+
+
+
+
 
 
 RepeatLoop:
@@ -185,443 +228,756 @@ Expression:
     char temp[MAX_NAME_LENGTH];
     snprintf(temp, sizeof(temp), "t%d", qc);
 
-    // Check if operands are compatible for arithmetic operations
-    if (!validateArithmeticOperation($1, $3)) {
-        yyerror("Invalid operands for addition");
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for addition must be initialized and have valid values.");
         YYERROR;
     }
 
-    // Retrieve type strings for both operands
+    // Get type information for operands
     char type1Str[MAX_TYPE_LENGTH];
     char type3Str[MAX_TYPE_LENGTH];
     getTypeString($1.type, type1Str);
     getTypeString($3.type, type3Str);
 
-    // Check if the operands are strings for concatenation
+    // Handle string concatenation if both operands are strings
     if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
-        snprintf(resultValue, sizeof(resultValue), "%s%s", getExpressionValue($1), getExpressionValue($3));
-        printf("Result value: %s\n", resultValue);
-        // Insert the result as a temporary variable in the symbol table
-        insertSymbol(symbolTable, temp, "string", resultValue, 0, false, true);
+        snprintf(resultValue, sizeof(resultValue), "%s%s", $1.value, $3.value);
+        
+        char valueStr[MAX_VALUE_LENGTH];
+        createValueString(TYPE_STRING, resultValue, valueStr);
 
-        // Generate quadruplet for string concatenation
-        insererQuadreplet(&q, "CONCAT", getExpressionValue($1), getExpressionValue($3), temp, qc++);
-
-        // Set result values
         $$.type = TYPE_STRING;
-        strncpy($$.value, temp, MAX_NAME_LENGTH - 1);
+        strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
         $$.value[MAX_NAME_LENGTH - 1] = '\0';
-        $$.next = NULL;
-        $$.data = NULL;
+
+        // Generate quadruplet for concatenation operation
+        insererQuadreplet(&q, "CONCAT", $1.value, $3.value, temp, qc++);
     } 
     // Handle numeric addition
     else {
-        // Determine result type
+        // Handle floating point addition
         if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
             $$.type = TYPE_FLOAT;
-
-            // Compute the result
-            float val1 = atof(getExpressionValue($1));
-            float val2 = atof(getExpressionValue($3));
+            float val1 = atof($1.value);
+            float val2 = atof($3.value);
             snprintf(resultValue, sizeof(resultValue), "%.2f", val1 + val2);
-        } else {
+            
+            char valueStr[MAX_VALUE_LENGTH];
+            createValueString($$.type, resultValue, valueStr);
+            
+            strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+            $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+            // Generate quadruplet for addition operation
+            insererQuadreplet(&q, "+", $1.value, $3.value, temp, qc++);
+        } 
+        // Handle integer addition
+        else {
             $$.type = TYPE_INTEGER;
-
-            // Compute the result
-            int val1 = atoi(getExpressionValue($1));
-            int val2 = atoi(getExpressionValue($3));
+            int val1 = atoi($1.value);
+            int val2 = atoi($3.value);
             snprintf(resultValue, sizeof(resultValue), "%d", val1 + val2);
-        }
+            
+            char valueStr[MAX_VALUE_LENGTH];
+            createValueString($$.type, resultValue, valueStr);
+            
+            strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+            $$.value[MAX_NAME_LENGTH - 1] = '\0';
 
-        // Create value string for symbol table insertion
+            // Generate quadruplet for addition operation
+            insererQuadreplet(&q, "+", $1.value, $3.value, temp, qc++);
+        }
+    }
+}
+
+    | Expression SUB Expression {
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for subtraction must be initialized and have valid values.");
+        YYERROR;
+    }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle floating point subtraction
+    if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
+        $$.type = TYPE_FLOAT;
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        snprintf(resultValue, sizeof(resultValue), "%.2f", val1 - val2);
+        
         char valueStr[MAX_VALUE_LENGTH];
         createValueString($$.type, resultValue, valueStr);
-
-        // Insert the result as a temporary variable in the symbol table
-        insertSymbol(symbolTable, temp, $$.type == TYPE_FLOAT ? "float" : "int", valueStr, 0, false, true);
-
-        // Generate quadruplet for numeric addition
-        insererQuadreplet(&q, "+", getExpressionValue($1), getExpressionValue($3), temp, qc++);
-
-        // Set result values
-        strncpy($$.value, temp, MAX_NAME_LENGTH - 1);
+        
+        // Store result in expression value
+        strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
         $$.value[MAX_NAME_LENGTH - 1] = '\0';
-        $$.next = NULL;
-        $$.data = NULL;
+
+        // Generate quadruplet for subtraction operation
+        insererQuadreplet(&q, "-", $1.value, $3.value, temp, qc++);
+    } 
+    // Handle integer subtraction
+    else {
+        $$.type = TYPE_INTEGER;
+        int val1 = atoi($1.value);
+        int val2 = atoi($3.value);
+        snprintf(resultValue, sizeof(resultValue), "%d", val1 - val2);
+        
+        char valueStr[MAX_VALUE_LENGTH];
+        createValueString($$.type, resultValue, valueStr);
+        
+        // Store result in expression value
+        strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+        $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+        // Generate quadruplet for subtraction operation
+        insererQuadreplet(&q, "-", $1.value, $3.value, temp, qc++);
     }
 }
 
 
-
-    | Expression SUB Expression {
-        if (!isNumericType($1.type) || !isNumericType($3.type)) {
-            yyerror("Invalid operands for subtraction");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        if (strcmp($1.type, "float") == 0 || strcmp($3.type, "float") == 0) {
-            strcpy($$.type, "float");
-            float val1 = atof($1.value);
-            float val2 = atof($3.value);
-            snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%.2f", val1 - val2);
-        } else {
-            strcpy($$.type, "int");
-            int val1 = atoi($1.value);
-            int val2 = atoi($3.value);
-            snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%d", val1 - val2);
-        }
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "-", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
-    }
-
     | Expression MUL Expression {
-        if (!isNumericType($1.type) || !isNumericType($3.type)) {
-            yyerror("Invalid operands for multiplication");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        if (strcmp($1.type, "float") == 0 || strcmp($3.type, "float") == 0) {
-            strcpy($$.type, "float");
-            float val1 = atof($1.value);
-            float val2 = atof($3.value);
-            snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%.2f", val1 * val2);
-        } else {
-            strcpy($$.type, "int");
-            int val1 = atoi($1.value);
-            int val2 = atoi($3.value);
-            snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%d", val1 * val2);
-        }
-        
-    
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "*", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for subtraction must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle floating point subtraction
+    if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
+        $$.type = TYPE_FLOAT;
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        snprintf(resultValue, sizeof(resultValue), "%.2f", val1 * val2);
+        
+        char valueStr[MAX_VALUE_LENGTH];
+        createValueString($$.type, resultValue, valueStr);
+        
+        // Store result in expression value
+        strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+        $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+        // Generate quadruplet for subtraction operation
+        insererQuadreplet(&q, "-", $1.value, $3.value, temp, qc++);
+    } 
+    // Handle integer subtraction
+    else {
+        $$.type = TYPE_INTEGER;
+        int val1 = atoi($1.value);
+        int val2 = atoi($3.value);
+        snprintf(resultValue, sizeof(resultValue), "%d", val1 * val2);
+        
+        char valueStr[MAX_VALUE_LENGTH];
+        createValueString($$.type, resultValue, valueStr);
+        
+        // Store result in expression value
+        strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+        $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+        // Generate quadruplet for subtraction operation
+        insererQuadreplet(&q, "-", $1.value, $3.value, temp, qc++);
+    }
+}
 
     | Expression DIV Expression {
-        if (!isNumericType($1.type) || !isNumericType($3.type)) {
-            yyerror("Invalid operands for division");
-            YYERROR;
-        }
-        
-        // Check for division by zero
-        if ((strcmp($3.type, "int") == 0 && atoi($3.value) == 0) ||
-            (strcmp($3.type, "float") == 0 && atof($3.value) == 0.0)) {
-            yyerror("Division by zero");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        // Division always results in float
-        strcpy($$.type, "float");
-        float val1 = strcmp($1.type, "int") == 0 ? atoi($1.value) : atof($1.value);
-        float val2 = strcmp($3.type, "int") == 0 ? atoi($3.value) : atof($3.value);
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%.2f", val1 / val2);
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "/", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for division must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Check for division by zero
+    if (atof($3.value) == 0) {
+        yyerror("Division by zero error");
+        YYERROR;
+    }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Always return float for regular division
+    $$.type = TYPE_FLOAT;
+    float val1 = atof($1.value);
+    float val2 = atof($3.value);
+    snprintf(resultValue, sizeof(resultValue), "%.2f", val1 / val2);
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for division operation
+    insererQuadreplet(&q, "/", $1.value, $3.value, temp, qc++);
+}
+
+| Expression DIV Expression {
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for integer division must be initialized and have valid values.");
+        YYERROR;
+    }
+
+    // Check for division by zero
+    if (atoi($3.value) == 0) {
+        yyerror("Division by zero error");
+        YYERROR;
+    }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Integer division always returns integer
+    $$.type = TYPE_INTEGER;
+    int val1 = atoi($1.value);
+    int val2 = atoi($3.value);
+    snprintf(resultValue, sizeof(resultValue), "%d", val1 / val2);
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for integer division operation
+    insererQuadreplet(&q, "DIV", $1.value, $3.value, temp, qc++);
+}
+
 
     | Expression INT_DIV Expression {
-        if (strcmp($1.type, "int") != 0 || strcmp($3.type, "int") != 0) {
-            yyerror("Integer division requires integer operands");
-            YYERROR;
-        }
-        
-        if (atoi($3.value) == 0) {
-            yyerror("Division by zero");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "int");
-        int val1 = atoi($1.value);
-        int val2 = atoi($3.value);
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%d", val1 / val2);
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "DIV", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
-    }
-    | Expression MOD Expression {
-        if (strcmp($1.type, "int") != 0 || strcmp($3.type, "int") != 0) {
-            yyerror("Modulo operation requires integer operands");
-            YYERROR;
-        }
-        
-        if (atoi($3.value) == 0) {
-            yyerror("Modulo by zero");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "int");
-        int val1 = atoi($1.value);
-        int val2 = atoi($3.value);
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%d", val1 % val2);
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "MOD", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for integer division must be initialized and have valid values.");
+        YYERROR;
     }
 
-    | Expression EQUAL Expression {
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        // Handle comparison based on types
-        strcpy($$.type, "boolean");
-        bool isEqual = false;
-        
-        if (strcmp($1.type, $3.type) == 0) {
-            if (strcmp($1.type, "string") == 0) {
-                isEqual = (strcmp($1.value, $3.value) == 0);
-            } else if (strcmp($1.type, "float") == 0) {
-                isEqual = (fabs(atof($1.value) - atof($3.value)) < 0.000001);
-            } else {
-                isEqual = (strcmp($1.value, $3.value) == 0);
-            }
-        }
-        
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", isEqual ? "true" : "false");
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "==", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    // Check for division by zero
+    if (atoi($3.value) == 0) {
+        yyerror("Division by zero error");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Integer division always returns integer
+    $$.type = TYPE_INTEGER;
+    int val1 = atoi($1.value);
+    int val2 = atoi($3.value);
+    snprintf(resultValue, sizeof(resultValue), "%d", val1 / val2);
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for integer division operation
+    insererQuadreplet(&q, "DIV", $1.value, $3.value, temp, qc++);
+}
+
+    | Expression MOD Expression {
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for modulo must be initialized and have valid values.");
+        YYERROR;
+    }
+
+    // Check for modulo by zero
+    if (atoi($3.value) == 0) {
+        yyerror("Modulo by zero error");
+        YYERROR;
+    }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Modulo operation always returns integer
+    $$.type = TYPE_INTEGER;
+    int val1 = atoi($1.value);
+    int val2 = atoi($3.value);
+    snprintf(resultValue, sizeof(resultValue), "%d", val1 % val2);
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for modulo operation
+    insererQuadreplet(&q, "MOD", $1.value, $3.value, temp, qc++);
+}
+
+
+    |Expression EQUAL Expression {
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for equality comparison must be initialized and have valid values.");
+        YYERROR;
+    }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle string comparison
+    if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
+        int result = strcmp($1.value, $3.value) == 0;
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
+    }
+    // Handle numeric comparison
+    else {
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        int result = (val1 == val2);
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
+    }
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for equality comparison
+    insererQuadreplet(&q, "==", $1.value, $3.value, temp, qc++);
+}
+
 
     | Expression NOT_EQUAL Expression {
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool isNotEqual = true;
-        
-        if (strcmp($1.type, $3.type) == 0) {
-            if (strcmp($1.type, "string") == 0) {
-                isNotEqual = (strcmp($1.value, $3.value) != 0);
-            } else if (strcmp($1.type, "float") == 0) {
-                isNotEqual = (fabs(atof($1.value) - atof($3.value)) >= 0.000001);
-            } else {
-                isNotEqual = (strcmp($1.value, $3.value) != 0);
-            }
-        }
-        
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", isNotEqual ? "true" : "false");
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "!=", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for inequality comparison must be initialized and have valid values.");
+        YYERROR;
     }
 
-    | Expression GREATER_THAN Expression {
-        if (!isComparable($1.type, $3.type)) {
-            yyerror("Invalid types for comparison");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool isGreater = false;
-        
-        if (strcmp($1.type, "string") == 0) {
-            isGreater = (strcmp($1.value, $3.value) > 0);
-        } else if (isNumericType($1.type)) {
-            double val1 = strcmp($1.type, "int") == 0 ? atoi($1.value) : atof($1.value);
-            double val2 = strcmp($3.type, "int") == 0 ? atoi($3.value) : atof($3.value);
-            isGreater = (val1 > val2);
-        }
-        
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", isGreater ? "true" : "false");
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, ">", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle string comparison
+    if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
+        int result = strcmp($1.value, $3.value) != 0;
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
     }
+    // Handle numeric comparison
+    else {
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        int result = (val1 != val2);
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
+    }
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for inequality comparison
+    insererQuadreplet(&q, "!=", $1.value, $3.value, temp, qc++);
+}
+
+
+    |Expression GREATER_THAN Expression {
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for greater than comparison must be initialized and have valid values.");
+        YYERROR;
+    }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle string comparison
+    if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
+        int result = strcmp($1.value, $3.value) > 0;
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
+    }
+    // Handle float comparison
+    else if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        int result = (val1 > val2);
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
+    }
+    // Handle integer comparison
+    else {
+        int val1 = atoi($1.value);
+        int val2 = atoi($3.value);
+        int result = (val1 > val2);
+        snprintf(resultValue, sizeof(resultValue), "%s", result ? "true" : "false");
+    }
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    
+    char valueStr[MAX_VALUE_LENGTH];
+    createValueString($$.type, resultValue, valueStr);
+    
+    // Store result in expression value
+    strncpy($$.value, resultValue, MAX_NAME_LENGTH - 1);
+    $$.value[MAX_NAME_LENGTH - 1] = '\0';
+
+    // Generate quadruplet for greater than comparison
+    insererQuadreplet(&q, ">", $1.value, $3.value, temp, qc++);
+}
+
+
 
     | Expression LESS_THAN Expression {
-        if (!isComparable($1.type, $3.type)) {
-            yyerror("Invalid types for comparison");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool isLess = false;
-        
-        if (strcmp($1.type, "string") == 0) {
-            isLess = (strcmp($1.value, $3.value) < 0);
-        } else if (isNumericType($1.type)) {
-            double val1 = strcmp($1.type, "int") == 0 ? atoi($1.value) : atof($1.value);
-            double val2 = strcmp($3.type, "int") == 0 ? atoi($3.value) : atof($3.value);
-            isLess = (val1 < val2);
-        }
-        
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", isLess ? "true" : "false");
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "<", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for less than comparison must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle string comparison
+    if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
+        strcpy(resultValue, strcmp($1.value, $3.value) < 0 ? "true" : "false");
+    }
+    // Handle float comparison
+    else if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        strcpy(resultValue, val1 < val2 ? "true" : "false");
+    }
+    // Handle integer comparison
+    else {
+        int val1 = atoi($1.value);
+        int val2 = atoi($3.value);
+        strcpy(resultValue, val1 < val2 ? "true" : "false");
+    }
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for less than comparison
+    insererQuadreplet(&q, "<", $1.value, $3.value, temp, qc++);
+}
+
 
     | Expression GREATER_EQUAL Expression {
-        if (!isComparable($1.type, $3.type)) {
-            yyerror("Invalid types for comparison");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool isGreaterEqual = false;
-        
-        if (strcmp($1.type, "string") == 0) {
-            isGreaterEqual = (strcmp($1.value, $3.value) >= 0);
-        } else if (isNumericType($1.type)) {
-            double val1 = strcmp($1.type, "int") == 0 ? atoi($1.value) : atof($1.value);
-            double val2 = strcmp($3.type, "int") == 0 ? atoi($3.value) : atof($3.value);
-            isGreaterEqual = (val1 >= val2);
-        }
-        
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", isGreaterEqual ? "true" : "false");
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, ">=", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for greater than or equal comparison must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle string comparison
+    if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
+        strcpy(resultValue, strcmp($1.value, $3.value) >= 0 ? "true" : "false");
+    }
+    // Handle float comparison
+    else if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        strcpy(resultValue, val1 >= val2 ? "true" : "false");
+    }
+    // Handle integer comparison
+    else {
+        int val1 = atoi($1.value);
+        int val2 = atoi($3.value);
+        strcpy(resultValue, val1 >= val2 ? "true" : "false");
+    }
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for greater than or equal comparison
+    insererQuadreplet(&q, ">=", $1.value, $3.value, temp, qc++);
+}
+
 
     | Expression LESS_EQUAL Expression {
-        if (!isComparable($1.type, $3.type)) {
-            yyerror("Invalid types for comparison");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool isLessEqual = false;
-        
-        if (strcmp($1.type, "string") == 0) {
-            isLessEqual = (strcmp($1.value, $3.value) <= 0);
-        } else if (isNumericType($1.type)) {
-            double val1 = strcmp($1.type, "int") == 0 ? atoi($1.value) : atof($1.value);
-            double val2 = strcmp($3.type, "int") == 0 ? atoi($3.value) : atof($3.value);
-            isLessEqual = (val1 <= val2);
-        }
-        
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", isLessEqual ? "true" : "false");
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "<=", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for less than or equal comparison must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Handle string comparison
+    if (strcmp(type1Str, "string") == 0 && strcmp(type3Str, "string") == 0) {
+        strcpy(resultValue, strcmp($1.value, $3.value) <= 0 ? "true" : "false");
+    }
+    // Handle float comparison
+    else if (strcmp(type1Str, "float") == 0 || strcmp(type3Str, "float") == 0) {
+        float val1 = atof($1.value);
+        float val2 = atof($3.value);
+        strcpy(resultValue, val1 <= val2 ? "true" : "false");
+    }
+    // Handle integer comparison
+    else {
+        int val1 = atoi($1.value);
+        int val2 = atoi($3.value);
+        strcpy(resultValue, val1 <= val2 ? "true" : "false");
+    }
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for less than or equal comparison
+    insererQuadreplet(&q, "<=", $1.value, $3.value, temp, qc++);
+}
+
 
     | Expression LOGICAL_AND Expression {
-        if (!isBooleanType($1.type) || !isBooleanType($3.type)) {
-            yyerror("Logical AND operation requires boolean operands");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool val1 = strcmp($1.value, "true") == 0;
-        bool val2 = strcmp($3.value, "true") == 0;
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", (val1 && val2) ? "true" : "false");
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "AND", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for logical AND must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Both operands must be boolean
+    if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
+        yyerror("Logical AND requires boolean operands");
+        YYERROR;
+    }
+
+    // Perform logical AND operation
+    bool val1 = strcmp($1.value, "true") == 0;
+    bool val2 = strcmp($3.value, "true") == 0;
+    strcpy(resultValue, (val1 && val2) ? "true" : "false");
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for logical AND operation
+    insererQuadreplet(&q, "AND", $1.value, $3.value, temp, qc++);
+}
+ 
 
     | Expression LOGICAL_OR Expression {
-        if (!isBooleanType($1.type) || !isBooleanType($3.type)) {
-            yyerror("Logical OR operation requires boolean operands");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool val1 = strcmp($1.value, "true") == 0;
-        bool val2 = strcmp($3.value, "true") == 0;
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", (val1 || val2) ? "true" : "false");
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "OR", $1.value, $3.value, temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operands for null values
+    if (!$1.value || !$3.value) {
+        yyerror("Operands for logical OR must be initialized and have valid values.");
+        YYERROR;
     }
+
+    // Get type information for operands
+    char type1Str[MAX_TYPE_LENGTH];
+    char type3Str[MAX_TYPE_LENGTH];
+    getTypeString($1.type, type1Str);
+    getTypeString($3.type, type3Str);
+
+    // Both operands must be boolean
+    if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
+        yyerror("Logical OR requires boolean operands");
+        YYERROR;
+    }
+
+    // Perform logical OR operation
+    bool val1 = strcmp($1.value, "true") == 0;
+    bool val2 = strcmp($3.value, "true") == 0;
+    strcpy(resultValue, (val1 || val2) ? "true" : "false");
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for logical OR operation
+    insererQuadreplet(&q, "OR", $1.value, $3.value, temp, qc++);
+}
+
 
     | LOGICAL_NOT Expression {
-        if (!isBooleanType($2.type)) {
-            yyerror("Logical NOT operation requires boolean operand");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, "boolean");
-        bool val = strcmp($2.value, "true") == 0;
-        snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%s", !val ? "true" : "false");
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "NOT", $2.value, "", temp, qc++);
-        strcpy($$.value, resultValue);
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operand for null value
+    if (!$2.value) {
+        yyerror("Operand for logical NOT must be initialized and have a valid value.");
+        YYERROR;
     }
 
-    | SUB Expression %prec UMINUS {
-        if (!isNumericType($2.type)) {
-            yyerror("Unary minus requires numeric operand");
-            YYERROR;
-        }
-        
-        char resultValue[MAX_VALUE_LENGTH];
-        char temp[20];
-        sprintf(temp, "t%d", qc);
-        
-        strcpy($$.type, $2.type);
-        if (strcmp($2.type, "int") == 0) {
-            snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%d", -atoi($2.value));
-        } else {
-            snprintf(resultValue, MAX_VALUE_LENGTH - 1, "%.2f", -atof($2.value));
-        }
-        
-        insertSymbol(symbolTable, temp, $$.type, resultValue, 0, false, true);
-        insererQuadreplet(&q, "NEG", $2.value, "", temp, qc++);
-        strcpy($$.value, resultValue);
+    // Get type information for operand
+    char typeStr[MAX_TYPE_LENGTH];
+    getTypeString($2.type, typeStr);
+
+    // Operand must be boolean
+    if ($2.type != TYPE_BOOLEAN) {
+        yyerror("Logical NOT requires a boolean operand");
+        YYERROR;
     }
+
+    // Perform logical NOT operation
+    bool val = strcmp($2.value, "true") == 0;
+    strcpy(resultValue, (!val) ? "true" : "false");
+
+    // Set type to boolean
+    $$.type = TYPE_BOOLEAN;
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for logical NOT operation
+    insererQuadreplet(&q, "NOT", $2.value, "", temp, qc++);
+}
+
+
+    | SUB Expression %prec UMINUS {
+    char resultValue[MAX_VALUE_LENGTH];
+    char temp[MAX_NAME_LENGTH];
+    snprintf(temp, sizeof(temp), "t%d", qc);
+
+    // Validate operand for null value
+    if (!$2.value) {
+        yyerror("Operand for unary minus must be initialized and have a valid value.");
+        YYERROR;
+    }
+
+    // Get type information for operand
+    char typeStr[MAX_TYPE_LENGTH];
+    getTypeString($2.type, typeStr);
+
+    // Handle float negation
+    if (strcmp(typeStr, "float") == 0) {
+        $$.type = TYPE_FLOAT;
+        float val = -atof($2.value);
+        snprintf(resultValue, sizeof(resultValue), "%.2f", val);
+    }
+    // Handle integer negation
+    else if (strcmp(typeStr, "int") == 0) {
+        $$.type = TYPE_INTEGER;
+        int val = -atoi($2.value);
+        snprintf(resultValue, sizeof(resultValue), "%d", val);
+    }
+    // Error for non-numeric types
+    else {
+        yyerror("Unary minus requires numeric operand");
+        YYERROR;
+    }
+
+    strcpy($$.value, resultValue);
+
+    // Generate quadruplet for unary minus operation
+    insererQuadreplet(&q, "UMINUS", $2.value, "", temp, qc++);
+}
     ;
 
 
@@ -854,33 +1210,24 @@ Assignment:
             YYERROR;
         }
         
-        // Get symbol type
-        int symbolType = -1;
+        // Type compatibility check
+        int symbolType;
         if (strcmp(symbol->type, "int") == 0) symbolType = TYPE_INTEGER;
         else if (strcmp(symbol->type, "float") == 0) symbolType = TYPE_FLOAT;
         else if (strcmp(symbol->type, "string") == 0) symbolType = TYPE_STRING;
         else if (strcmp(symbol->type, "bool") == 0) symbolType = TYPE_BOOLEAN;
         
-        // Create variable structure for return value
-        variable var;
-        var.entry = symbol;
-        
-        // Validate and update value
-        char newValue[MAX_NAME_LENGTH];
-        if (!validateAndSetValue(newValue, $3, symbolType)) {
+        if (symbolType != $3.type) {
+            yyerror("Type mismatch in assignment");
             YYERROR;
         }
         
-        // Update symbol table
-        updateSymbolValue(symbolTable, symbol->id, newValue, 0);
+        // Update symbol table with the new value
+        updateSymbolValue(symbolTable, symbol->id, $3.value, 0);
         
-        // Generate quadruplet
-        insererQuadreplet(&q, ":=", getExpressionValue($3), "", $1, qc++);
-        
-        $$ = var;
+        // Generate quadruplet for assignment
+        insererQuadreplet(&q, ":=", $3.value, "", $1, qc++);
     }
-    ;
-
 PrintStatement:
     PRINT Expression 
     ;
@@ -928,40 +1275,13 @@ Condition:
     | IfWithElse
     ;
 
-// A revoir les quadruplet sont pas bien generes
+
 SimpleIf:
-    IF Expression COLON StatementList ENDIF {
-        char labelFalse[20];
-        sprintf(labelFalse, "L%d", qc++);
-
-        insererQuadreplet(&q, "IF_FALSE", getExpressionValue($2), "GOTO", labelFalse, qc++);
-        
-
-        // Label for false branch (end of IF)
-        insererQuadreplet(&q, "LABEL", labelFalse, "", "", qc++);
-    }
+    IF Expression COLON StatementList ENDIF
 
 
 IfWithElse:
-    IF Expression COLON StatementList ElseIfList {
-        char labelFalse[20], labelEnd[20];
-        sprintf(labelFalse, "L%d", qc++);
-        sprintf(labelEnd, "L%d", qc++);
-
-        // Generate a single quadruplet for the condition
-        insererQuadreplet(&q, "IF_FALSE", getExpressionValue($2), "GOTO", labelFalse, qc++);
-
-
-        // Jump to end after true block
-        insererQuadreplet(&q, "GOTO", labelEnd, "", "", qc++);
-
-        // Label for false branch (ELSE/ELSEIF)
-        insererQuadreplet(&q, "LABEL", labelFalse, "", "", qc++);
-
-
-        // End label
-        insererQuadreplet(&q, "LABEL", labelEnd, "", "", qc++);
-    }
+    IF Expression COLON StatementList ElseIfList
 
 
 ElseIfList:
@@ -969,21 +1289,7 @@ ElseIfList:
         // Generate quadruplets for ELSE block
         
     }
-    | ELSEIF Expression COLON StatementList ElseIfList {
-        char labelNext[20];
-        sprintf(labelNext, "L%d", qc++);
-
-        // Generate a single quadruplet for ELSEIF condition
-        insererQuadreplet(&q, "ELSEIF_FALSE", getExpressionValue($2), "GOTO", labelNext, qc++);
-
-        // Generate quadruplets for true block
-        
-
-        // Continue with next ELSEIF/ELSE block
-        insererQuadreplet(&q, "LABEL", labelNext, "", "", qc++);
-        
-        
-    }
+    | ELSEIF Expression COLON StatementList ElseIfList 
 SwitchStatement:
     SWITCH Expression COLON CaseList ENDSWITCH
     ;
