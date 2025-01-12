@@ -1,26 +1,6 @@
 Let int x be 7
-int c
-c == -x
+int p
 const float m be 3.14
 const bool n be true
 Let int y be 3
-Let int z be y * x
-Let int k be x % 2
-Let float d be z / 2
-Let int d be z // 2
-Let bool isActive be z != x
-Let Array int myArray be [10, 20, 30]
-Let str name be "Hello" + " Aicha"
-Let bool g be false
-Let bool j be false
-Let bool w be g and j
-Let int x be 6
-if x > 5 :
-Let int y be 10
-elseIf x < 5 :
-    Print "good"
-elseIf x == 5:
-    Print "perfect"
-else:
-    Print "hello"
-EndIf
+Let int z be x + y

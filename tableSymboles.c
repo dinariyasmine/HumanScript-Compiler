@@ -1,134 +1,170 @@
 #include "tableSymboles.h"
 
-/***************************************fonction HASH********************************************************/
 unsigned int hash(const char *name) {
     unsigned int hashValue = 0;
     for (int i = 0; name[i] != '\0'; i++) {
-        hashValue = 31 * hashValue + name[i]; // Calcul incremental du hash
+        hashValue = 31 * hashValue + name[i];
     }
-    return hashValue % HASH_TABLE_SIZE; // Reduction dans la plage de taille de table
+    return hashValue % HASH_TABLE_SIZE;
 }
 
-/*************************************** Creer une Table des Symboles ****************************************/
 SymbolTable *createSymbolTable() {
     SymbolTable *table = (SymbolTable *)malloc(sizeof(SymbolTable));
-    if (!table) {
-        fprintf(stderr, "Erreur : Memoire insuffisante pour la table des symboles.\n");
-        exit(EXIT_FAILURE);
+    if (table == NULL) {
+        return NULL;
     }
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        table->buckets[i] = NULL; // Initialisation de chaque bucket a NULL
-    }
-    table->nextId = 0; // Initialisation du compteur d'ID
+    memset(table->buckets, 0, sizeof(table->buckets));
+    table->nextId = 0;
     return table;
 }
 
-/*************************************** Inserer un Symbole *************************************************/
-void insertSymbol(SymbolTable *table, const char *name, const char *type, SymbolValue value, int scopeLevel, bool isConst, bool isInitialized) {
-if (strcmp(type, "array") == 0 && value.arrayValue != NULL) {
-    printf("Inserting array '%s' with address: %p\n", name, (void*)value.arrayValue);
-} else {
-    printf("Inserting '%s' with value: %d\n", name, value.intValue);
-}
+void insertSymbol(SymbolTable *table, const char *name, const char *type, 
+                 const char *value, int scopeLevel, bool isConst, bool isInitialized) {
+    if (!table || !name || !type) {
+        return;
+    }
 
+    // Create new entry
+    SymbolEntry *entry = (SymbolEntry *)malloc(sizeof(SymbolEntry));
+    if (!entry) {
+        return;
+    }
 
-    unsigned int index = hash(name); // Calcul de l'index base sur le hash du nom
-    SymbolEntry *newEntry = (SymbolEntry *)malloc(sizeof(SymbolEntry));
-    newEntry->id = table->nextId++;       // Assignation d'un ID unique
-    strncpy(newEntry->name, name, MAX_NAME_LENGTH - 1); // Copie du nom (fixed-size array)
-    newEntry->name[MAX_NAME_LENGTH - 1] = '\0'; // Ensure null-termination
-    strncpy(newEntry->type, type, MAX_TYPE_LENGTH - 1); // Copie du type (fixed-size array)
-    newEntry->type[MAX_TYPE_LENGTH - 1] = '\0'; // Ensure null-termination
+    // Initialize with zeros
+    memset(entry, 0, sizeof(SymbolEntry));
+
+    // Copy data
+    entry->id = table->nextId++;
+    entry->scopeLevel = scopeLevel;
+    entry->isConst = isConst;
+    entry->isInitialized = isInitialized;
+
+    strncpy(entry->name, name, MAX_NAME_LENGTH - 1);
+    strncpy(entry->type, type, MAX_TYPE_LENGTH - 1);
     
-    newEntry->value = value;              // Assignation de la valeur
-    newEntry->isConst = isConst;          // Indique si le symbole est une constante
-    newEntry->isInitialized = isInitialized; // Indique si le symbole est initialisé
-    newEntry->scopeLevel = scopeLevel;    // Niveau de portee
-    newEntry->next = table->buckets[index]; // Insertion en tete de liste
-    table->buckets[index] = newEntry;    // Mise a jour du bucket
+    if (value) {
+        strncpy(entry->value, value, MAX_NAME_LENGTH - 1);
+    }
+
+    // Insert into table
+    unsigned int index = hash(name);
+    entry->next = table->buckets[index];
+    table->buckets[index] = entry;
 }
 
-/*************************************** Rechercher un Symbole par ID ****************************************/
+SymbolEntry *lookupSymbolByName(SymbolTable *table, const char *name, int scopeLevel) {
+    if (!table || !name) {
+        return NULL;
+    }
+
+    unsigned int index = hash(name);
+    SymbolEntry *entry = table->buckets[index];
+
+    while (entry) {
+        if (strcmp(entry->name, name) == 0 && entry->scopeLevel == scopeLevel) {
+            return entry;
+        }
+        entry = entry->next;
+    }
+
+    if (scopeLevel == 1) {
+        // Check global scope
+        entry = table->buckets[index];
+        while (entry) {
+            if (strcmp(entry->name, name) == 0 && entry->scopeLevel == 0) {
+                return entry;
+            }
+            entry = entry->next;
+        }
+    }
+
+    return NULL;
+}
+
 SymbolEntry *lookupSymbolById(SymbolTable *table, int id, int scopeLevel) {
+    if (!table) {
+        return NULL;
+    }
+
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
+        SymbolEntry *entry = table->buckets[i];
+        while (entry) {
+            if (entry->id == id && 
+                (entry->scopeLevel == scopeLevel || 
+                 (scopeLevel == 1 && entry->scopeLevel == 0))) {
+                return entry;
+            }
+            entry = entry->next;
+        }
+    }
+    return NULL;
+}
+
+void clearSymbolTable(SymbolTable *table) {
+    if (!table) {
+        return;
+    }
+
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         SymbolEntry *current = table->buckets[i];
         while (current) {
-            if (current->id == id && current->scopeLevel == scopeLevel) {
-                return current; // Retourne l'entree si l'ID correspond
-            }
-            current = current->next;
+            SymbolEntry *next = current->next;
+            free(current);
+            current = next;
         }
-
-        if (scopeLevel == 1){
-            current = table->buckets[i];
-            while (current) {
-            if (current->id == id && current->scopeLevel == 0) {
-                return current; 
-            }
-            current = current->next;
-        }
-            
-        }
+        table->buckets[i] = NULL;
     }
-    return NULL; // Aucun symbole trouve pour cet ID
+    table->nextId = 0;
 }
 
-/*************************************** Rechercher un Symbole par Nom ***************************************/
-SymbolEntry *lookupSymbolByName(SymbolTable *table, const char *name, int scopeLevel) {
-    if (!table) {
-        fprintf(stderr, "Error: Symbol table is NULL in lookupSymbolByName.\n");
-        return NULL;
+void freeSymbolTable(SymbolTable *table) {
+    if (table) {
+        clearSymbolTable(table);
+        free(table);
     }
-    if (!name) {
-        fprintf(stderr, "Error: Name is NULL in lookupSymbolByName.\n");
-        return NULL;
-    }
-
-    unsigned int index = hash(name); // Calculate the hash index
-    SymbolEntry *current = table->buckets[index];
-    while (current) {
-        if (strcmp(current->name, name) == 0 && current->scopeLevel == scopeLevel) {
-            return current; // Return the entry if found
-        }
-        current = current->next;
-    }
-
-    return NULL; // Return NULL if the symbol is not found
 }
 
-/*************************************** Supprimer un Symbole par Nom ***************************************/
 void deleteSymbolByName(SymbolTable *table, const char *name) {
-    unsigned int index = hash(name); // Calcul de l'index du bucket
+    if (!table || !name) {
+        return;
+    }
+
+    unsigned int index = hash(name);
     SymbolEntry *current = table->buckets[index];
     SymbolEntry *prev = NULL;
 
     while (current) {
         if (strcmp(current->name, name) == 0) {
             if (prev) {
-                prev->next = current->next; // Detache l'entree de la liste chainee
+                prev->next = current->next;
             } else {
-                table->buckets[index] = current->next; // Mise a jour du bucket
+                table->buckets[index] = current->next;
             }
-            free(current); // Libere l'entree du symbole
+            free(current);
             return;
         }
         prev = current;
         current = current->next;
     }
 }
-/*************************************** Supprimer un Symbole par ID ******************************************/
+
 void deleteSymbolById(SymbolTable *table, int id) {
+    if (!table) {
+        return;
+    }
+
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         SymbolEntry *current = table->buckets[i];
         SymbolEntry *prev = NULL;
+
         while (current) {
-            if (current->id == id) { // Symbole trouve
+            if (current->id == id) {
                 if (prev) {
-                    prev->next = current->next; // Retire le symbole de la liste chainee
+                    prev->next = current->next;
                 } else {
-                    table->buckets[i] = current->next; // Met a jour le bucket si le symbole est en tete de liste
+                    table->buckets[i] = current->next;
                 }
-                free(current); // Libere l'entree du symbole
+                free(current);
                 return;
             }
             prev = current;
@@ -137,230 +173,78 @@ void deleteSymbolById(SymbolTable *table, int id) {
     }
 }
 
-/*************************************** Liberer toute la Table des Symboles ********************************/
-void freeSymbolTable(SymbolTable *table) {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        SymbolEntry *current = table->buckets[i];
-        while (current) {
-            SymbolEntry *toFree = current;
-            current = current->next;
-            free(toFree); // Libere l'entree du symbole
-        }
-    }
-    free(table); // Libere la structure de la table
-}
-
-/*************************************** Vider la Table des Symboles **************************************/
-void clearSymbolTable(SymbolTable *table) {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        SymbolEntry *current = table->buckets[i];
-        while (current) {
-            SymbolEntry *toFree = current;
-            current = current->next;
-            free(toFree); // Libere l'entree du symbole
-        }
-        table->buckets[i] = NULL; // Reinitialise le bucket a NULL
-    }
-}
-
-/*************************************** Verifier si un Symbole Existe par Nom ****************************/
-int symbolExistsByName(SymbolTable *table, const char *name, int scopeLevel) {
-    return lookupSymbolByName(table, name, scopeLevel) != NULL; // Retourne vrai si le symbole existe
-}
-
-/*************************************** Verifier si un Symbole Existe par ID ****************************/
-int symbolExistsById(SymbolTable *table, int id, int scopeLevel) {
-    return lookupSymbolById(table, id, scopeLevel) != NULL; // Retourne vrai si le symbole existe
-}
-
-/*************************************** Calculer les Largeurs des Colonnes *******************************/
-void computeColumnWidths(SymbolTable *table, int *idWidth, int *nameWidth, int *typeWidth, int *scopeWidth, int *valueWidth) {
-    *idWidth = strlen("ID");
-    *nameWidth = strlen("Name");
-    *typeWidth = strlen("Type");
-    *scopeWidth = strlen("Scope Level");
-    *valueWidth = strlen("Value");
-
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-        SymbolEntry *current = table->buckets[i];
-        while (current) {
-            // Calcul de la largeur de l'ID
-            int idLength = snprintf(NULL, 0, "%d", current->id);
-            if (idLength > *idWidth) *idWidth = idLength;
-
-            // Calcul de la largeur du nom
-            if ((int)strlen(current->name) > *nameWidth) *nameWidth = strlen(current->name);
-
-            // Calcul de la largeur du type
-            if ((int)strlen(current->type) > *typeWidth) *typeWidth = strlen(current->type);
-
-            // Calcul de la largeur du niveau de portee
-            int scopeLength = snprintf(NULL, 0, "%d", current->scopeLevel);
-            if (scopeLength > *scopeWidth) *scopeWidth = scopeLength;
-
-            // Calcul de la largeur de la valeur en fonction du type
-            int valueLength = 0;
-            if (strcmp(current->type, "int") == 0) {
-                valueLength = snprintf(NULL, 0, "%d", current->value.intValue);
-            } else if (strcmp(current->type, "float") == 0) {
-                valueLength = snprintf(NULL, 0, "%.2f", current->value.floatValue);
-            } else if (strcmp(current->type, "string") == 0) {
-                valueLength = strlen(current->value.stringValue);
-            } else {
-                valueLength = strlen("N/A"); // Valeur par defaut pour les types non supportes
-            }
-
-            if (valueLength > *valueWidth) *valueWidth = valueLength;
-
-            current = current->next;
-        }
-    }
-}
-
-/*************************************** Lister tous les Symboles avec Colonnes Separees par '|' *********/
 void listAllSymbols(SymbolTable *table) {
     if (!table) {
-        printf("Table des symboles est NULL\n");
         return;
     }
 
-    int idWidth = 5;      // Minimum width for ID
-    int nameWidth = 10;   // Minimum width for Name
-    int typeWidth = 8;    // Minimum width for Type
-    int scopeWidth = 6;   // Minimum width for Scope
-    int valueWidth = 10;  // Minimum width for Value
+    printf("\nSymbol Table Contents:\n");
+    printf("ID\tName\tType\tScope\tValue\n");
+    printf("----------------------------------------\n");
 
-    // Calculate maximum widths
-    computeColumnWidths(table, &idWidth, &nameWidth, &typeWidth, &scopeWidth, &valueWidth);
-
-    // Print header
-    printf("\n+-%*s-+-%*s-+-%*s-+-%*s-+-%*s-+\n", 
-           idWidth, "---------", 
-           nameWidth, "---------", 
-           typeWidth, "---------", 
-           scopeWidth, "---------",
-           valueWidth, "---------");
-
-    printf("| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-           idWidth, "ID",
-           nameWidth, "Name",
-           typeWidth, "Type",
-           scopeWidth, "Scope",
-           valueWidth, "Value");
-
-    printf("+-%*s-+-%*s-+-%*s-+-%*s-+-%*s-+\n",
-           idWidth, "---------",
-           nameWidth, "---------",
-           typeWidth, "---------",
-           scopeWidth, "---------",
-           valueWidth, "---------");
-
-    // Print entries
-for (int i = 0; i < HASH_TABLE_SIZE; i++) {
-    SymbolEntry *current = table->buckets[i];
-    while (current) {
-        char valueStr[64]; // Buffer to store the value as a string
-        if (strcmp(current->type, "int") == 0) {
-            snprintf(valueStr, sizeof(valueStr), "%d", current->value.intValue);
-        } else if (strcmp(current->type, "bool") == 0) {
-            // Print boolean as true/false
-            snprintf(valueStr, sizeof(valueStr), "%s", current->value.intValue ? "true" : "false");
-        } else if (strcmp(current->type, "float") == 0) {
-            snprintf(valueStr, sizeof(valueStr), "%.2f", current->value.floatValue);
-        } else if (strcmp(current->type, "string") == 0) {
-            snprintf(valueStr, sizeof(valueStr), "%s", current->value.stringValue);
-        } // In tableSymboles.c, modify the listAllSymbols function:
-        else if (strcmp(current->type, "array") == 0 && current->value.arrayValue != NULL) {
-    ArrayType* arr = current->value.arrayValue;
-    
-    int written = 0;
-    written += snprintf(valueStr, sizeof(valueStr), "[");
-
-    // Iterate through the array elements (use arr->length instead of arr->capacity)
-    for (int i = 0; i < arr->length && written < sizeof(valueStr); i++) {
-        if (i > 0) {
-            written += snprintf(valueStr + written, sizeof(valueStr) - written, ",");
-        }
-
-        // Access the array element based on its type
-        switch (arr->elementType) {
-            case TYPE_INTEGER:
-                written += snprintf(valueStr + written, sizeof(valueStr) - written, 
-                    "%d", arr->data[i].intValue);  // Corrected access to arr->data[i]
-                break;
-            case TYPE_FLOAT:
-                written += snprintf(valueStr + written, sizeof(valueStr) - written, 
-                    "%.2f", arr->data[i].floatValue);
-                break;
-            case TYPE_STRING:
-                written += snprintf(valueStr + written, sizeof(valueStr) - written, 
-                    "%s", arr->data[i].stringValue);
-                break;
-            // Handle other types if needed
-        }
-    }
-    written += snprintf(valueStr + written, sizeof(valueStr) - written, "]");
-}
-
-
-        printf("| %-*d | %-*s | %-*s | %-*d | %-*s |\n",
-               idWidth, current->id,
-               nameWidth, current->name,
-               typeWidth, current->type,
-               scopeWidth, current->scopeLevel,
-               valueWidth, valueStr);
-        current = current->next;
-    }
-}
-
-    printf("+-%*s-+-%*s-+-%*s-+-%*s-+-%*s-+\n",
-           idWidth, "---------",
-           nameWidth, "---------",
-           typeWidth, "---------",
-           scopeWidth, "---------",
-           valueWidth, "---------");
-}
-
-/*************************************** Mettre a Jour la Valeur d'un Symbole ****************************/
-void updateSymbolValue(SymbolTable *table, int id, SymbolValue newValue, int scopeLevel) {
-    SymbolEntry *entry = lookupSymbolById(table, id, scopeLevel);
-    if (entry) {
-        // Mise a jour de la valeur du symbole
-        entry->value = newValue;
-        printf("La valeur du symbole ID %d a ete mise a jour.\n", id);
-    } else {
-        printf("Symbole avec ID %d non trouve.\n", id);
-    }
-}
-
-/*************************************** Liberer une Entree de Symbole Individuelle ************************/
-void freeSymbolEntry(SymbolEntry *entry) {
-    if (entry) {
-        free(entry); // Libere la structure de l'entree elle-meme
-    }
-}
-
-/*************************************** Redimensionner la Table des Symboles ********************************/
-void resizeSymbolTable(SymbolTable *table, int newSize) {
-    // Cree une nouvelle table des symboles de la taille souhaitee
-    SymbolTable *newTable = createSymbolTable();
-    newTable->nextId = table->nextId;  // Conserve la valeur de `nextId` de l'ancienne table
-
-    // Copie tous les symboles de l'ancienne table vers la nouvelle
     for (int i = 0; i < HASH_TABLE_SIZE; i++) {
         SymbolEntry *current = table->buckets[i];
         while (current) {
-            insertSymbol(newTable, current->name, current->type, current->value, current->scopeLevel, current->isConst, current->isInitialized);
+            if (strncmp(current->type, "array", 5) == 0) {
+                // Print array values in a formatted way
+                printf("%d\t%s\t%s\t%d\t", 
+                    current->id,
+                    current->name,
+                    current->type,
+                    current->scopeLevel);
+                
+                // Parse and print array values from the quadruplet
+                char *value = current->value;
+                char *token = strtok(value, ",");
+                int first = 1;
+                
+                while (token != NULL) {
+                    if (!first) {
+                        printf(",");
+                    }
+                    printf("%s", token);
+                    first = 0;
+                    token = strtok(NULL, ",");
+                }
+                
+            } else {
+                printf("%d\t%s\t%s\t%d\t%s\n",
+                    current->id,
+                    current->name,
+                    current->type,
+                    current->scopeLevel,
+                    current->isInitialized ? current->value : "(uninitialized)");
+            }
             current = current->next;
         }
     }
+}
 
-    // Libere la memoire associee a l'ancienne table des symboles
-    freeSymbolTable(table);
 
-    // Remplace la table d'origine par la nouvelle table redimensionnee
-    *table = *newTable;
+void updateSymbolValue(SymbolTable *table, int id, const char *newValue, int scopeLevel) {
+    if (!table || !newValue) {
+        return;
+    }
 
-    // Libere la memoire de la nouvelle table, car elle a ete copiee dans l'ancienne
-    free(newTable);
+    SymbolEntry *entry = lookupSymbolById(table, id, scopeLevel);
+    if (!entry || entry->isConst) {
+        return;
+    }
+
+    strncpy(entry->value, newValue, MAX_NAME_LENGTH - 1);
+    entry->value[MAX_NAME_LENGTH - 1] = '\0';
+    entry->isInitialized = true;
+}
+
+int symbolExistsByName(SymbolTable *table, const char *name, int scopeLevel) {
+    return lookupSymbolByName(table, name, scopeLevel) != NULL;
+}
+
+int symbolExistsById(SymbolTable *table, int id, int scopeLevel) {
+    return lookupSymbolById(table, id, scopeLevel) != NULL;
+}
+
+void resizeSymbolTable(SymbolTable *table, int newSize) {
+    // Size is fixed, so this is a no-op
+    (void)newSize;
 }
