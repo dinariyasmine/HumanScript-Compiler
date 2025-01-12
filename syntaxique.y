@@ -87,7 +87,7 @@ void yyerror(const char *s);
 %type <entry> Declaration Parameter ParameterList NonEmptyParameterList
 %type <variable> Assignment
 
-/* Precedence rules */
+
 %left LOGICAL_OR
 %left LOGICAL_AND
 %left EQUAL NOT_EQUAL
@@ -107,7 +107,7 @@ extern int yylex();
 int currentColumn = 1;
 SymbolTable *symbolTable;
 pile * stack;
-quad *q = NULL;  // Change from local to global variable
+quad *q = NULL;  
 int qc = 1;
 
 int currentArrayType = -1;
@@ -121,21 +121,20 @@ Program:
     StatementList
     ;
 
-/* Liste d'instructions : peut être vide ou contenir plusieurs instructions */
 
 StatementList:
     /* empty */                    { }
     | StatementList Statement      { }
     ;
 
-/* Une instruction peut être simple ou composée */
+
 Statement:
     SimpleStatement
     | CompoundStatement
     | COMMENT
     ;
 
-/* Instructions simples : déclarations, affectations, appels... */
+
 SimpleStatement:
     Declaration
     | PrintStatement
@@ -145,7 +144,7 @@ SimpleStatement:
     | RETURN Expression
     ;
 
-/* Instructions composées : boucles, fonctions, conditions... */
+
 CompoundStatement:
     LoopStatement
     | Function
@@ -153,7 +152,7 @@ CompoundStatement:
     | SwitchStatement
     ;
 
-/* Différents types de boucles */
+
 LoopStatement:
     ForLoop
     | WhileLoop
@@ -161,28 +160,29 @@ LoopStatement:
     ;
 
 
-/* Boucle For avec itération sur un tableau */
+
 ForLoop:
     FOR EACH ID IN Expression COLON StatementList ENDFOR
     ;
 
-/* Boucle While classique */
+
 WhileLoop:
     WHILE Expression COLON StatementList ENDWHILE
     ;
 
-/* Boucle Repeat Until */
+
 RepeatLoop:
     REPEAT COLON StatementList UNTIL Expression ENDREPEAT
     ;
 
-/* Expressions avec gestion des priorités */
+
 Expression:
     SimpleExpression {
         $$ = $1;
     }
   
     | Expression ADD Expression {
+        // cest pour le cas ou on a par exemple : "Hello" + "Aicha"
         if ($1.type == TYPE_STRING && $3.type == TYPE_STRING) {
             $$.type = TYPE_STRING;
             char* result = malloc(strlen($1.stringValue) + strlen($3.stringValue) + 1);
@@ -196,6 +196,7 @@ Expression:
             sprintf(temp, "t%d", qc);
             insererQuadreplet(&q, "CONCAT", $1.stringValue, $3.stringValue, temp, qc++);
         } else {
+            // quand on a par exemple 5 + 3
             $$.type = validateArithmeticOperation($1, $3);
             if ($$.type == TYPE_INTEGER) {
                 $$.integerValue = $1.integerValue + $3.integerValue;
@@ -311,26 +312,27 @@ Expression:
         insererQuadreplet(&q, "<=", getExpressionValue($1), getExpressionValue($3), temp, qc++);
     }
 
-    | | Expression LOGICAL_AND Expression {
-    // First, ensure both operands are of TYPE_BOOLEAN
-    if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
-        yyerror("Logical AND operation requires boolean operands");
-        YYERROR;
+    | Expression LOGICAL_AND Expression {
+
+        // les 2 expressions doivent etre des booleans
+        if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
+            yyerror("Logical AND operation requires boolean operands");
+            YYERROR;
+        }
+        
+        
+        $$.type = TYPE_BOOLEAN;
+        $$.booleanValue = $1.booleanValue && $3.booleanValue;
+        
+        // Generate quadruplet
+        char temp[20];
+        sprintf(temp, "t%d", qc);
+        insererQuadreplet(&q, "AND", 
+            $1.booleanValue ? "true" : "false",
+            $3.booleanValue ? "true" : "false", 
+            temp, 
+            qc++);
     }
-    
-    // Perform the logical AND operation
-    $$.type = TYPE_BOOLEAN;
-    $$.booleanValue = $1.booleanValue && $3.booleanValue;
-    
-    // Generate quadruplet
-    char temp[20];
-    sprintf(temp, "t%d", qc);
-    insererQuadreplet(&q, "AND", 
-        $1.booleanValue ? "true" : "false",
-        $3.booleanValue ? "true" : "false", 
-        temp, 
-        qc++);
-}
 
     | Expression LOGICAL_OR Expression {
         if ($1.type != TYPE_BOOLEAN || $3.type != TYPE_BOOLEAN) {
@@ -340,7 +342,6 @@ Expression:
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = $1.booleanValue || $3.booleanValue;
         
-        // Debugging output
         printf("OR Operation: %d || %d = %d\n", 
                $1.booleanValue, $3.booleanValue, $$.booleanValue);
         
@@ -377,7 +378,7 @@ Expression:
     ;
 
 
-/* Expressions simples : valeurs, identificateurs, tableaux... */
+
 SimpleExpression:
     INT_LITERAL {
         $$.type = TYPE_INTEGER;
@@ -395,31 +396,36 @@ SimpleExpression:
     }
 
     | ID {
-    SymbolEntry *symbol = lookupSymbolByName(symbolTable, $1, 0);
-    if (!symbol) {
-        yyerror("Undefined identifier");
-        YYERROR;
-    }
-    
-    if (strcmp(symbol->type, "bool") == 0) {
-        $$.type = TYPE_BOOLEAN;
-        $$.booleanValue = symbol->value.intValue != 0;
-    } else if (strcmp(symbol->type, "int") == 0) {
-        $$.type = TYPE_INTEGER;
-        $$.integerValue = symbol->value.intValue;
-    } else if (strcmp(symbol->type, "float") == 0) {
-        $$.type = TYPE_FLOAT;
-        $$.floatValue = symbol->value.floatValue;
-    } else if (strcmp(symbol->type, "string") == 0) {
-        $$.type = TYPE_STRING;
-        strncpy($$.stringValue, symbol->value.stringValue, 254);
-        $$.stringValue[254] = '\0';
-    }
-}
+            // symbol est le symbole recupere a partir de la table des symboles
+            SymbolEntry *symbol = lookupSymbolByName(symbolTable, $1, 0);
 
-
+            // on verifie si le symbole existe
+            if (!symbol) {
+                yyerror("Undefined identifier");
+                YYERROR;
+            }
+            
+            // on extrait le type a partir du symbole recupere et on le stocke dans symbolType c'est pour le cas 
+            // ou le symbole est dans une expression ou on a besoin de son type
+            if (strcmp(symbol->type, "bool") == 0) {
+                
+                $$.type = TYPE_BOOLEAN;
+                $$.booleanValue = symbol->value.intValue != 0;
+            } else if (strcmp(symbol->type, "int") == 0) {
+                $$.type = TYPE_INTEGER;
+                $$.integerValue = symbol->value.intValue;
+            } else if (strcmp(symbol->type, "float") == 0) {
+                $$.type = TYPE_FLOAT;
+                $$.floatValue = symbol->value.floatValue;
+            } else if (strcmp(symbol->type, "string") == 0) {
+                $$.type = TYPE_STRING;
+                strncpy($$.stringValue, symbol->value.stringValue, 254);
+                $$.stringValue[254] = '\0';
+            }
+        }
 
     | TRUE {
+        // on retourne le type et la valeur du boolean
         $$.type = TYPE_BOOLEAN;
         $$.booleanValue = true;
     }
@@ -615,7 +621,7 @@ Declaration:
 Type:
     INT     { 
         $$ = TYPE_INTEGER; 
-        currentArrayType = TYPE_INTEGER;  // Set currentArrayType
+        currentArrayType = TYPE_INTEGER;  
         printf("Setting type to INTEGER (%d)\n", TYPE_INTEGER);
     }
     | FLOAT { 
@@ -636,12 +642,12 @@ Type:
     | ARRAY Type { 
         $$ = TYPE_ARRAY;
         printf("Setting ARRAY type with base type: %d\n", currentArrayType);
-        // currentArrayType is already set by the inner Type rule
+        
     }
     | DICT 
     ;
 
-/* Affectation simple */
+
 Assignment:
     ID EQUAL Expression {
         // Check if identifier exists
@@ -657,7 +663,7 @@ Assignment:
             YYERROR;
         }
         
-        // Get the type as integer from type string
+        // on extrait le type a partir du symbole recupere et on le stocke dans symbolType
         int symbolType;
         if (strcmp(symbol->type, "int") == 0) {
             symbolType = TYPE_INTEGER;
@@ -677,15 +683,16 @@ Assignment:
         
         // Update symbol value
         SymbolValue newValue = {0};
+        // on verifie si la valeur a affecter est du meme type que le symbole
         if (!validateAndSetValue(&newValue, $3, symbolType)) {
             yyerror("Type mismatch in assignment");
             YYERROR;
         }
         
-        // Update symbol table
+        // Update symbol table avec la nouvelle valeur
         updateSymbolValue(symbolTable, symbol->id, newValue, 0);
         
-        // Generate assignment quadruplet
+        //on genere le quadruplet pour l'affectation
         char tempValue[30];
         switch($3.type) {
             case TYPE_INTEGER:
@@ -709,7 +716,7 @@ Assignment:
 
 PrintStatement:
     PRINT Expression {
-        // Generate print quadruplet
+        // on genere que le quadruplet pour l'affichage
         char tempValue[30];
         switch($2.type) {
             case TYPE_INTEGER:
@@ -734,43 +741,24 @@ InputStatement:
     ;
 
 
-/* Déclaration de fonction */
+
 Function:
-    FUNCTION ID COLON Type LPAREN ParameterList RPAREN LBRACE StatementList RBRACE {
-        // Create function entry in symbol table
-        SymbolValue value = {0};
-        char typeStr[MAX_TYPE_LENGTH];
-        getTypeString($4, typeStr);
+    FUNCTION ID COLON Type LPAREN ParameterList RPAREN LBRACE StatementList RBRACE
         
-        // Generate function start quadruplet
-        insererQuadreplet(&q, "FUNC_START", $2, "", "", qc++);
-        
-        // Store function parameters
-        if ($6 != NULL) {
-            char paramCount[10];
-            sprintf(paramCount, "%d", countParameters($6));
-            insererQuadreplet(&q, "PARAM_COUNT", $2, paramCount, "", qc++);
-        }
-        
-        // Generate function end quadruplet
-        insererQuadreplet(&q, "FUNC_END", $2, "", "", qc++);
-        
-        insertSymbol(symbolTable, $2, typeStr, value, 0, false, true);
-    }
     ;
 
 
-/* Appel de fonction */
+
 FunctionCall:
     CALL ID WITH PARAMETERS ParameterList LPAREN ExpressionList RPAREN {
-        printf("Appel valide avec paramètres\n");
+        printf("Appel valide avec parametres\n");
     }
     | CALL ID LPAREN RPAREN {
-        printf("Appel valide sans paramètres\n");
+        printf("Appel valide sans parametres\n");
     }
     ;
 
-/* Liste des paramètres de fonction */
+
 ParameterList:
     /* empty */
     | NonEmptyParameterList
@@ -785,80 +773,68 @@ Parameter:
     Type ID
     ;
 
-/* Structure conditionnelle If-Else */
 
 Condition:
     SimpleIf
     | IfWithElse
     ;
 
+// A revoir les quadruplet sont pas bien generes
 SimpleIf:
     IF Expression COLON StatementList ENDIF {
-        // Generate quadruplet for IF condition
-        insererQuadreplet(&q, "BZ", "", "", "0", qc++);  // Branch if false
-        int conditionPos = qc - 1;
+        char labelFalse[20];
+        sprintf(labelFalse, "L%d", qc++);
+
+        insererQuadreplet(&q, "IF_FALSE", getExpressionValue($2), "GOTO", labelFalse, qc++);
         
-        // Update the branch position after statements
-        char jumpLabel[20];
-        sprintf(jumpLabel, "%d", qc);
-        updateQuadreplet(q, conditionPos, jumpLabel);
+
+        // Label for false branch (end of IF)
+        insererQuadreplet(&q, "LABEL", labelFalse, "", "", qc++);
     }
-    ;
+
 
 IfWithElse:
     IF Expression COLON StatementList ElseIfList {
-        // Generate quadruplet for IF condition
-        insererQuadreplet(&q, "BZ", "", "", "0", qc++);
-        int conditionPos = qc - 1;
-        
-        // Insert jump quadruplet to skip else part
-        insererQuadreplet(&q, "BR", "", "", "0", qc++);
-        int skipPos = qc - 1;
-        
-        // Update the condition jump position
-        char condLabel[20];
-        sprintf(condLabel, "%d", qc);
-        updateQuadreplet(q, conditionPos, condLabel);
-        
-        // Update the skip jump position
-        char skipLabel[20];
-        sprintf(skipLabel, "%d", qc);
-        updateQuadreplet(q, skipPos, skipLabel);
+        char labelFalse[20], labelEnd[20];
+        sprintf(labelFalse, "L%d", qc++);
+        sprintf(labelEnd, "L%d", qc++);
+
+        // Generate a single quadruplet for the condition
+        insererQuadreplet(&q, "IF_FALSE", getExpressionValue($2), "GOTO", labelFalse, qc++);
+
+
+        // Jump to end after true block
+        insererQuadreplet(&q, "GOTO", labelEnd, "", "", qc++);
+
+        // Label for false branch (ELSE/ELSEIF)
+        insererQuadreplet(&q, "LABEL", labelFalse, "", "", qc++);
+
+
+        // End label
+        insererQuadreplet(&q, "LABEL", labelEnd, "", "", qc++);
     }
-    ;
+
 
 ElseIfList:
     ELSE COLON StatementList ENDIF {
-        // Generate jump to end of if-else
-        insererQuadreplet(&q, "BR", "", "", "0", qc++);
-        int endPos = qc - 1;
+        // Generate quadruplets for ELSE block
         
-        // Update jump position
-        char endLabel[20];
-        sprintf(endLabel, "%d", qc);
-        updateQuadreplet(q, endPos, endLabel);
     }
     | ELSEIF Expression COLON StatementList ElseIfList {
-        // Generate quadruplet for ELSEIF condition
-        insererQuadreplet(&q, "BZ", "", "", "0", qc++);
-        int conditionPos = qc - 1;
+        char labelNext[20];
+        sprintf(labelNext, "L%d", qc++);
+
+        // Generate a single quadruplet for ELSEIF condition
+        insererQuadreplet(&q, "ELSEIF_FALSE", getExpressionValue($2), "GOTO", labelNext, qc++);
+
+        // Generate quadruplets for true block
         
-        // Insert jump quadruplet
-        insererQuadreplet(&q, "BR", "", "", "0", qc++);
-        int skipPos = qc - 1;
+
+        // Continue with next ELSEIF/ELSE block
+        insererQuadreplet(&q, "LABEL", labelNext, "", "", qc++);
         
-        // Update positions
-        char condLabel[20], skipLabel[20];
-        sprintf(condLabel, "%d", qc);
-        updateQuadreplet(q, conditionPos, condLabel);
-        sprintf(skipLabel, "%d", qc);
-        updateQuadreplet(q, skipPos, skipLabel);
+        
     }
-    ;
-
-
-
-/* Structure Switch-Case */
 SwitchStatement:
     SWITCH Expression COLON CaseList ENDSWITCH
     ;
@@ -881,7 +857,7 @@ DefaultPart:
     | DEFAULT COLON StatementList
     ;
 
-/* Définition des littéraux tableau */
+
 ArrayLiteral:
     LBRACKET RBRACKET {
         printf("Creating empty array with base type: %d\n", currentArrayType);
@@ -918,7 +894,7 @@ DictLiteral:
     | LBRACE DictItems RBRACE
     ;
 
-/* Liste d'expressions pour les tableaux */
+
 ExpressionList:
     Expression {
         $$ = createExpressionNode($1);
@@ -952,44 +928,49 @@ void yyerror(const char *s) {
 }
 
 int main(void) {
-    /* Ouverture du fichier d'entrée */
+    // ouverture fichier de test
     yyin = fopen("input.txt", "r");
     if (!yyin) {
         fprintf(stderr, "Error: Could not open input file\n");
         return 1;
     }
 
-    // Initialize the symbol table before calling yyparse()
+    // Creation de la table des symboles
     symbolTable = createSymbolTable();
     if (!symbolTable) {
         fprintf(stderr, "Error: Failed to create symbol table.\n");
         fclose(yyin);
         return 1;
     }
-          
-    printf("Lancement de l'analyse syntaxique...\n");
-    int result = yyparse();
-    
-    if (result == 0) {
-        printf("Analyse syntaxique terminée avec succès.\n");
-    } else {
-        printf("Erreur lors de l'analyse syntaxique.\n");
-    }
 
-    // Free the symbol table after parsing is complete
-    listAllSymbols(symbolTable);  
-    freeSymbolTable(symbolTable);
+    // Creation de la pile
+    stack = malloc(sizeof(pile));
+    if (!stack) {
+        fprintf(stderr, "Error: Failed to allocate memory for stack.\n");
+        fclose(yyin);
+        freeSymbolTable(symbolTable);
+        return 1;
+    }
+    initPile(stack);
+
+    // Affichage du message de demarrage
+    printf("Starting syntax analysis...\n");
+
+    // Lancement de l'analyse syntaxique
+    int result = yyparse();
+
+    // Affichage du message de fin
+    free(stack);
+    // Affichage de table des symboles
+    listAllSymbols(symbolTable);
+    // Affichage des quadruplets generes
     afficherQuad(q);
 
-    // Close the input file
+    // Liberation de la table des symboles
+    freeSymbolTable(symbolTable);
+    
+    // Fermeture du fichier
     fclose(yyin);
-    printf("Fichier d'entrée fermé.\n");
-
-    if (result == 0) {
-        printf("Programme terminé avec succès.\n");
-    } else {
-        printf("Erreur lors de l'exécution du programme.\n");
-    }
     
     return result;
 }

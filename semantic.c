@@ -3,33 +3,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#define INITIAL_CAPACITY 10  // or any other suitable value
+#define INITIAL_CAPACITY 100
 
 
-
-void valeurToString(expression expression, char * valeur){
-    switch (expression.type){
-        case TYPE_INTEGER:
-            sprintf(valeur, "%d", expression.integerValue);
-            break;
-        case TYPE_FLOAT:
-            sprintf(valeur, "%.4f", expression.floatValue);
-            break;
-        case TYPE_STRING:
-            sprintf(valeur, "%s", expression.stringValue);
-            break;
-        case TYPE_BOOLEAN:
-            sprintf(valeur, "%s", expression.booleanValue ? "true" : "false");
-            break;
-        case TYPE_CONST:
-            sprintf(valeur, "const");
-            break;
-        
-        default:
-            sprintf(valeur, "Unknown type");
-            break;
-    }
-}
+// Fonctions pour les variables
 void getTypeString(int type, char* typeStr) {
     printf("Getting type string for type: %d\n", type);
     switch(type) {
@@ -120,6 +97,10 @@ void handleTypeError(const char* expectedType, const char* gotType) {
              expectedType, gotType);
     yyerror(errorMsg);
 }
+
+
+
+// Fonctions pour les listes
 ArrayType* createArrayFromExprList(ExpressionList* exprList, int baseType) {
     printf("Creating array from expression list with base type: %d\n", baseType);
     
@@ -224,37 +205,9 @@ ExpressionList* addExpressionToList(ExpressionList* list, expression expr) {
     return list;
 }
 
-bool validateTypeCompatibility(int declaredType, int expressionType) {
-    // Basic type equality check
-    if (declaredType == expressionType) {
-        return true;
-    }
 
-    // Special cases for numeric type compatibility
-    if ((declaredType == TYPE_FLOAT && expressionType == TYPE_INTEGER) ||
-        (declaredType == TYPE_INTEGER && expressionType == TYPE_FLOAT)) {
-        return true;
-    }
+// fonctions pour gerer les expressions
 
-    // Array type compatibility
-    if (declaredType == TYPE_ARRAY && expressionType == TYPE_ARRAY) {
-        // Additional array element type checking could be added here
-        return true;
-    }
-
-    return false;
-}
-int countParameters(SymbolEntry* paramList) {
-    int count = 0;
-    SymbolEntry* current = paramList;
-    
-    while (current != NULL) {
-        count++;
-        current = current->next;
-    }
-    
-    return count;
-}
 // Validates arithmetic operations between two expressions
 int validateArithmeticOperation(expression exp1, expression exp2) {
     // If both operands are integers, result is integer
