@@ -240,9 +240,7 @@ int symbolExistsByName(SymbolTable *table, const char *name, int scopeLevel) {
     return lookupSymbolByName(table, name, scopeLevel) != NULL;
 }
 
-int symbolExistsById(SymbolTable *table, int id, int scopeLevel) {
-    return lookupSymbolById(table, id, scopeLevel) != NULL;
-}
+
 
 void resizeSymbolTable(SymbolTable *table, int newSize) {
     (void)newSize;

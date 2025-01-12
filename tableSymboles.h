@@ -11,6 +11,7 @@
 #define TYPE_FLOAT 2
 #define TYPE_STRING 3
 #define TYPE_ARRAY 4
+#define TYPE_DICT 5
 #define MAX_NAME_LENGTH 64  
 #define MAX_TYPE_LENGTH 32
 #define MAX_VALUE_LENGTH 100  
@@ -19,7 +20,6 @@
 typedef struct ArrayType ArrayType;
 
 typedef struct ArrayType {
-    int elementType;   
     size_t length;     
     size_t capacity;    
     char** data;

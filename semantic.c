@@ -8,11 +8,11 @@
 
 
 // fonctions de gestion de liste
-ArrayType* createArray(int elementType) {
+ArrayType* createArray() {
     ArrayType* arr = malloc(sizeof(ArrayType));
     if (!arr) return NULL;
     
-    arr->elementType = elementType;
+
     arr->length = 0;
     arr->capacity = 10;  // Initial capacity
     arr->data = malloc(arr->capacity * sizeof(char*));
@@ -25,7 +25,7 @@ ArrayType* createArray(int elementType) {
     return arr;
 }
 
-ArrayType* createArrayFromExprList(ExpressionList* list, int elementType) {
+ArrayType* createArrayFromExprList(ExpressionList* list) {
     if (!list) return NULL;
     
     // Count elements first
@@ -40,7 +40,6 @@ ArrayType* createArrayFromExprList(ExpressionList* list, int elementType) {
     ArrayType* arr = malloc(sizeof(ArrayType));
     if (!arr) return NULL;
     
-    arr->elementType = elementType;
     arr->length = count;
     arr->capacity = count;
     arr->data = malloc(count * sizeof(char*));
@@ -111,8 +110,12 @@ void getTypeString(int type, char *typeStr) {
         case TYPE_ARRAY:
             strcpy(typeStr, "array");
             break;
+        case TYPE_DICT:     
+            strcpy(typeStr, "dict");
+            break;
         default:
-            yyerror("Unsupported type");
+            printf("Unsupported type returned by getTypeString %d\n", type);
+            yyerror("Unsupported type returned by getTypeString");
             YYERROR;
     }
 }
@@ -139,8 +142,12 @@ void createValueString(int type, const char *inputValue, char *valueStr) {
                 strncpy(valueStr, "[]", MAX_VALUE_LENGTH - 1);
                 valueStr[MAX_VALUE_LENGTH - 1] = '\0';
                 break;
+            case TYPE_DICT:     
+                strncpy(valueStr, "{}", MAX_VALUE_LENGTH - 1);
+                valueStr[MAX_VALUE_LENGTH - 1] = '\0';
+                break;
             default:
-                yyerror("Unsupported type");
+                yyerror("Unsupported type returned by createValueString 1");
                 
                 YYERROR;
         }
@@ -164,8 +171,12 @@ void createValueString(int type, const char *inputValue, char *valueStr) {
                 strncpy(valueStr, inputValue, MAX_VALUE_LENGTH - 1);
                 valueStr[MAX_VALUE_LENGTH - 1] = '\0';
                 break;
+            case TYPE_DICT:     
+                strncpy(valueStr, inputValue, MAX_VALUE_LENGTH - 1);
+                valueStr[MAX_VALUE_LENGTH - 1] = '\0';
+                break;
             default:
-                yyerror("Unsupported type");
+                yyerror("Unsupported type returned by createValueString 2");
                 
                 YYERROR;
         }

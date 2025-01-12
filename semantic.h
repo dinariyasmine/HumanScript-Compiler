@@ -21,8 +21,8 @@ typedef struct variable {
 
 // Function declarations
 void getTypeString(int type, char* typeStr);
-ArrayType* createArray(int elementType);
-ArrayType* createArrayFromExprList(ExpressionList* list, int elementType);
+ArrayType* createArray();
+ArrayType* createArrayFromExprList(ExpressionList* list);
 void getTypeString(int type, char *typeStr);
 void createValueString(int type, const char *inputValue, char *valueStr);
 ExpressionList* createExpressionNode(expression expr);

@@ -60,7 +60,7 @@ void yyerror(const char *s);
 %token ADD SUB MUL DIV INT_DIV MOD
 %token EQUAL NOT_EQUAL GREATER_THAN LESS_THAN GREATER_EQUAL LESS_EQUAL
 %token COLON LPAREN RPAREN LBRACE RBRACE COMMA LBRACKET RBRACKET
-%token LOGICAL_AND LOGICAL_OR LOGICAL_NOT
+%token LOGICAL_AND LOGICAL_OR LOGICAL_NOT 
 
 %token <booleanValue> TRUE FALSE
 %token <integerValue> INT_LITERAL 
@@ -74,9 +74,6 @@ void yyerror(const char *s);
 %type <expression> Expression SimpleExpression
 %type <exprList> ExpressionList
 %type <expression> ArrayLiteral
-%type <expression> DictLiteral
-%type <expression> DictItems
-%type <expression> DictItem
 %type <type> Type
 %type <entry> Declaration Parameter ParameterList NonEmptyParameterList
 %type <variable> Assignment
@@ -102,7 +99,7 @@ SymbolTable *symbolTable;
 pile * stack;
 quad *q = NULL;  // quadruplet
 int qc = 1; // pile
-int currentArrayType = -1;
+
 void yysuccess(char *s);
 void yyerror(const char *s);
 void showLexicalError();
@@ -124,6 +121,7 @@ Statement:
     SimpleStatement
     | CompoundStatement
     | COMMENT
+    | DictLiteral
     ;
 
 
@@ -1024,10 +1022,7 @@ SimpleExpression:
     | ArrayLiteral {
         $$ = $1;
     }
-    | DictLiteral
-    | LPAREN Expression RPAREN { 
-        $$ = $2; 
-    }
+    | LPAREN Expression RPAREN 
     | FunctionCall
     ;
 
@@ -1040,10 +1035,23 @@ Declaration:
             yyerror(error);
             YYERROR;
         }
+        char exprTypeStr[MAX_TYPE_LENGTH];
+        getTypeString($5.type, exprTypeStr);
+        printf("Expression type: %s\n", exprTypeStr);
 
         // Validate types match
         char typeStr[MAX_TYPE_LENGTH];
         getTypeString($2, typeStr);
+        printf("Type retourne: %s\n", typeStr);
+
+         if ($2 != $5.type) {
+            char error[100];
+            snprintf(error, sizeof(error), 
+                    "Type mismatch: Cannot assign %s to variable of type %s", 
+                    exprTypeStr, typeStr);
+            yyerror(error);
+            YYERROR;
+        }
 
         // Create value string
         char valueStr[MAX_VALUE_LENGTH];
@@ -1076,6 +1084,17 @@ Declaration:
                 // Validate types match
         char typeStr[MAX_TYPE_LENGTH];
         getTypeString($2, typeStr);
+                char exprTypeStr[MAX_TYPE_LENGTH];
+        getTypeString($5.type, exprTypeStr);
+        printf("Expression type: %s\n", exprTypeStr);
+            if ($2 != $5.type) {
+        char error[100];
+        snprintf(error, sizeof(error), 
+                "Type mismatch: Cannot assign %s to constant of type %s", 
+                exprTypeStr, typeStr);
+        yyerror(error);
+        YYERROR;
+    }
 
         // Create value string
         char valueStr[MAX_VALUE_LENGTH];
@@ -1109,6 +1128,7 @@ Declaration:
         char typeStr[MAX_TYPE_LENGTH];
         char valueStr[MAX_VALUE_LENGTH];
         getTypeString($1, typeStr);
+        
         createValueString($1, NULL, valueStr);
 
         // Insert into symbol table with default value
@@ -1128,11 +1148,11 @@ Declaration:
 
     }
     ;
-    |   LET ARRAY Type ID BE ArrayLiteral {
+    |   LET ARRAY ID BE ArrayLiteral {
         printf("Array declaration with initialization started\n");
         
         // Check for existing symbol
-        if (symbolExistsByName(symbolTable, $4, 0)) {
+        if (symbolExistsByName(symbolTable, $3, 0)) {
             yyerror("Cannot redeclare identifier");
             YYERROR;
         }
@@ -1141,18 +1161,19 @@ Declaration:
         char typeStr[MAX_TYPE_LENGTH];
         getTypeString(TYPE_ARRAY, typeStr);
         
+        
         // Create an empty array entry in symbol table
-        insertSymbol(symbolTable, $4, typeStr, "[]", 0, false, true);
+        insertSymbol(symbolTable, $3, typeStr, "[]", 0, false, true);
         
         // Get the newly created symbol
-        SymbolEntry* arraySymbol = lookupSymbolByName(symbolTable, $4, 0);
+        SymbolEntry* arraySymbol = lookupSymbolByName(symbolTable, $3, 0);
         if (!arraySymbol) {
             yyerror("Failed to create array symbol");
             YYERROR;
         }
         
         // Validate array type matches declared type
-        expression arrayExpr = $6;
+        expression arrayExpr = $5;
         if (arrayExpr.type != TYPE_ARRAY) {
             yyerror("Type mismatch: Expected array literal");
             YYERROR;
@@ -1164,34 +1185,33 @@ Declaration:
         // Generate array declaration quadruplet
         char temp[20];
         sprintf(temp, "t%d", qc);
-        insererQuadreplet(&q, "ARRAY_DECL", $4, arrayExpr.value, temp, qc++);
+        insererQuadreplet(&q, "ARRAY_DECL", $3, arrayExpr.value, temp, qc++);
         
         $$ = arraySymbol;
-        printf("Array '%s' declared successfully\n", $4);
+        printf("Array '%s' declared successfully\n", $3);
     }
     ;
 
 Type:
     INT     { 
         $$ = TYPE_INTEGER; 
-        currentArrayType = TYPE_INTEGER;  
+        
     }
     | FLOAT { 
         $$ = TYPE_FLOAT;
-        currentArrayType = TYPE_FLOAT;
+        
     }
     | BOOL  { 
         $$ = TYPE_BOOLEAN;
-        currentArrayType = TYPE_BOOLEAN;
+        
     }
     | STR   { 
         $$ = TYPE_STRING;
-        currentArrayType = TYPE_STRING;
+        
     }
-    | ARRAY Type { 
+    | ARRAY { 
         $$ = TYPE_ARRAY;
     }
-    | DICT
     ;
 
 
@@ -1240,7 +1260,6 @@ InputStatement:
 
 Function:
     FUNCTION ID COLON Type LPAREN ParameterList RPAREN LBRACE StatementList RBRACE
-        
     ;
 
 
@@ -1316,7 +1335,7 @@ DefaultPart:
 ArrayLiteral:
     LBRACKET RBRACKET {
         $$.type = TYPE_ARRAY;
-        ArrayType* arr = createArray(currentArrayType);
+        ArrayType* arr = createArray();
         if (!arr) {
             yyerror("Failed to create empty array");
             YYERROR;
@@ -1326,7 +1345,7 @@ ArrayLiteral:
     }
     | LBRACKET ExpressionList RBRACKET {
         $$.type = TYPE_ARRAY;
-        ArrayType* arr = createArrayFromExprList($2, currentArrayType);
+        ArrayType* arr = createArrayFromExprList($2);
         if (!arr) {
             yyerror("Failed to create array from expression list");
             YYERROR;
@@ -1347,10 +1366,6 @@ ArrayLiteral:
     }
     ;
 
-DictLiteral:
-    LBRACE RBRACE
-    | LBRACE DictItems RBRACE
-    ;
 
 
 ExpressionList:
@@ -1361,15 +1376,18 @@ ExpressionList:
         $$ = addExpressionToList($1, $3);
     }
     ;
-
+DictLiteral:
+    LET DICT ID BE LBRACE RBRACE  // Empty dictionary with DICT keyword
+    | LET DICT ID BE LBRACE DictItems RBRACE  // Dictionary with items
+    ;
 
 DictItems:
-    DictItem
-    | DictItems COMMA DictItem
+    DictItem  // Single item
+    | DictItems COMMA DictItem  // Multiple items separated by commas
     ;
 
 DictItem:
-    STRING_LITERAL COLON Expression
+    STRING_LITERAL COLON Expression  // Key-value pair
     ;
 
 %%
