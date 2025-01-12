@@ -28,3 +28,8 @@ Let int e be 6
 While e < 10:
     e == e + 1
 EndWhile
+Repeat:
+Let int sum be e + 1
+Let int counter be 0
+Until counter > 0
+EndRepeat
