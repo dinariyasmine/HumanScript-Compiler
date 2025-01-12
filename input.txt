@@ -1,4 +1,30 @@
 Let int x be 6
-While x < 10:
-    x == x + 1
+Let Dict nom be {"name": "yasmine", "prenom": "dinari"}
+int r
+r == 3
+const float m be 3.14
+const bool n be true
+Let int y be 3
+Let int z be y * x
+Let float k be m + 1.3
+Let float d be z / 2
+Let int o be z // 2
+Let bool isActive be z != x
+Let Array int myArray be [10, 20, 30]
+Let str name be "Hello" + " Aicha"
+Let bool g be false
+Let bool j be false
+Let bool w be g and j
+if x > 5 :
+Let int h be 10
+elseIf x < 5 :
+    Print "good"
+elseIf x == 5:
+    Print "perfect"
+else:
+    Print "hello"
+EndIf
+Let int e be 6
+While e < 10:
+    e == e + 1
 EndWhile
