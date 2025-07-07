@@ -285,18 +285,6 @@ graph LR
 
 ## Performance Optimization
 
-### Hash Table Implementation
-
-```c
-// Optimized hash function for symbol table
-unsigned int hash(const char* name) {
-    unsigned int hash_value = 0;
-    for (int i = 0; name[i] != '\0'; i++) {
-        hash_value = (hash_value * 31) + name[i];
-    }
-    return hash_value % HASH_TABLE_SIZE;
-}
-```
 
 ### Performance Metrics
 
@@ -378,7 +366,7 @@ function main() {
 
 **Academic Project - Systems and Software Engineering**
 
-**Institution:** Université - Systèmes informatiques et logiciels Groupe 01  
+**Institution:** Higher Scholl Of Computer Science Algiers
 **Academic Year:** 2024/2025  
 **Contact:** ly_dinari@esi.dz
 
@@ -397,10 +385,6 @@ git commit -m "Add: description of changes"
 # Push and create pull request
 git push origin feature/improvement-name
 ```
-
-## License
-
-This project is developed for academic purposes as part of the Compilation course curriculum.
 
 ## Acknowledgments
 
