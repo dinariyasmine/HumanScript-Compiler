@@ -246,42 +246,6 @@ mindmap
         procedure names
 ```
 
-### Symbol Table Architecture
-
-```mermaid
-graph LR
-    subgraph "Hash Table Structure"
-        A[Hash Function]
-        B[Collision Handling]
-        C[Bucket Management]
-    end
-    
-    subgraph "Symbol Properties"
-        D[Name]
-        E[Type]
-        F[Value]
-        G[Scope Level]
-    end
-    
-    subgraph "Operations"
-        H[Insert O(1)]
-        I[Lookup O(1)]
-        J[Delete O(1)]
-        K[Scope Management]
-    end
-    
-    A --> B
-    B --> C
-    
-    D --> H
-    E --> I
-    F --> J
-    G --> K
-    
-    style A fill:#e3f2fd
-    style H fill:#f3e5f5
-    style D fill:#e8f5e8
-```
 
 ## Performance Optimization
 
